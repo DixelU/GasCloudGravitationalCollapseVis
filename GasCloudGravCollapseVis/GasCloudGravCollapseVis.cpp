@@ -2307,8 +2307,10 @@ void Init() {
 
 #include "grav_eq_iterator.h"
 
-dsfield dsf(100);
-dsfield dsf_buffer(100);
+
+constexpr double fsize = 200;
+dsfield dsf(fsize);
+dsfield dsf_buffer(fsize);
 
 void onTimer(int v);
 void mDisplay() {
@@ -2316,13 +2318,18 @@ void mDisplay() {
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
 
-		randomise_dsfield(dsf,2,0,1.,3);
+		for (int y = 0; y < dsf.size(); y++) {
+			for (int x = 0; x < dsf.size(); x++) {
+				dsf[y][x] = (fsize/10)/sqrt((fsize /2 - y)*(fsize /2 - y) + (fsize/2 - x)*(fsize/2 - x) + (fsize/10));
+			}
+		}
+		//randomise_dsfield(dsf,2,0,1.,5);
 
 		thread th([&]() {
 			while (true) {
 				for (int y = 0; y < dsf.size(); y++) {
 					for (int x = 0; x < dsf.size(); x++) {
-						dsf_buffer[y][x] = dsf[y][x] - 0.0001*(
+						dsf_buffer[y][x] = dsf[y][x] - 0.001*(
 							d_h2::DF_2_order(dsf, x, y, d::dx) +
 							d_h2::DF_2_order(dsf, x, y, d::dy)
 						);
