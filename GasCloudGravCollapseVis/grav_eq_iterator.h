@@ -126,7 +126,14 @@ namespace d_h4 {
 				-.25* dsf[y][x + 2]
 				) / 3.;
 		else {
-			return d_h2::_finite_difference_1st_order_x(dsf, x, y);
+			int32_t pdx = (x > 1 ? -1 : 1);
+			return pdx*(
+				-6.25*dsf[y][x]
+				+ 12. * dsf[y][x + pdx]
+				- 9. * dsf[y][x + 2*pdx]
+				+ 4. * dsf[y][x + 3*pdx]
+				- 0.75 * dsf[y][x + 4*pdx]
+			)/3.;
 		}
 	}
 	inline double _finite_difference_1st_order_y(dsfield &dsf, size_t x, size_t y) {
@@ -139,7 +146,14 @@ namespace d_h4 {
 				-.25* dsf[y + 2][x]
 			) / 3.;
 		else {
-			return d_h2::_finite_difference_1st_order_y(dsf, x, y);
+			int32_t pdy = (y > 1 ? -1 : 1);
+			return pdy * (
+				-6.25*dsf[y][x]
+				+ 12. * dsf[y + pdy][x]
+				- 9. * dsf[y + 2 * pdy][x]
+				+ 4. * dsf[y + 3 * pdy][x]
+				- 0.75 * dsf[y + 4 * pdy][x]
+				) / 3.;
 		}
 	}
 	inline double _finite_difference_2nd_order_xx(dsfield &dsf, size_t x, size_t y) {
@@ -147,13 +161,21 @@ namespace d_h4 {
 		if (x > 1 && x < dsf_edge)
 			return (
 				- .25 * dsf[y][x - 2]  
-				+ 16. * dsf[y][x - 1] 
-				- 30. * dsf[y][x    ] 
-				+ 16. * dsf[y][x + 1] 
+				+ 4. * dsf[y][x - 1]
+				- 7.5 * dsf[y][x    ]
+				+ 4. * dsf[y][x + 1]
 				- .25 * dsf[y][x + 2] 
 				) / 3.;
 		else {
-			return d_h2::_finite_difference_2nd_order_xx(dsf, x, y);
+			int32_t pdx = (x < 2 ? 1 : -1);
+			return (
+				11.25*dsf[y][x]
+				- 38.5*dsf[y][x + pdx]
+				+ 53.5*dsf[y][x + 2*pdx]
+				- 39.*dsf[y][x + 3*pdx]
+				+ 15.25*dsf[y][x + 4*pdx]
+				- 2.5*dsf[y][x + 5*pdx]
+			) / 3.;
 		}
 	}
 	inline double _finite_difference_2nd_order_yy(dsfield &dsf, size_t x, size_t y) {
@@ -161,13 +183,21 @@ namespace d_h4 {
 		if (y > 1 && y < dsf_edge)
 			return (
 				- .25 * dsf[y - 2][x]
-				+ 16. * dsf[y - 1][x]
-				- 30. * dsf[y    ][x]
-				+ 16. * dsf[y + 1][x]
+				+ 4. * dsf[y - 1][x]
+				- 7.5 * dsf[y    ][x]
+				+ 4. * dsf[y + 1][x]
 				- .25 * dsf[y + 2][x]
 				) / 3.;
 		else {
-			return d_h2::_finite_difference_2nd_order_yy(dsf, x, y);
+			int32_t pdy = (y < 2 ? 1 : -1);
+			return (
+				11.25*dsf[y][x]
+				- 38.5*dsf[y + pdy][x]
+				+ 53.5*dsf[y + 2 * pdy][x]
+				- 39.*dsf[y + 3 * pdy][x]
+				+ 15.25*dsf[y + 4 * pdy][x]
+				- 2.5*dsf[y + 5 * pdy][x]
+				) / 3.;
 		}
 	}
 	inline double DF_2_order(dsfield &dsf, size_t x, size_t y, d diff) {

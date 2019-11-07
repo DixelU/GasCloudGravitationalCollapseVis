@@ -22,12 +22,28 @@ using fv_utils::rdrand;
 
 typedef struct drawable_square_field {
 	field fd;
+	double garbage_var,outside_val;
+	int64_t field_size;
 	double cell_size;
-	drawable_square_field(size_t n=100) {
-		line ld(n,0);
+	drawable_square_field(size_t n = 100,double outside_val = 0.) : field_size(n), outside_val(outside_val) {
+		line ld(n, 0);
 		fd.assign(n, ld);
 	}
-	line& operator[](size_t N) {
+	double at(int64_t x, int64_t y) const {
+		if (x >= 0 && x < field_size && y >= 0 && y < field_size)
+			return fd[y][x];
+		else return 0;
+	}
+	double& at(int64_t x, int64_t y) {
+		if (x >= 0 && x < field_size && y >= 0 && y < field_size)
+			return fd[y][x];
+		else
+			return garbage_var=0;
+	}
+	line& operator[](int64_t N) {
+		return fd[N];
+	}
+	line operator[](int64_t N) const {
 		return fd[N];
 	}
 	void swap(drawable_square_field& dsf) {
@@ -71,10 +87,10 @@ inline void draw_dsfield(const dsfield& dsf, float center_xpos, float center_ypo
 	float ym = range + center_ypos, xm = range + center_xpos, inverse, cell_size = 2 * range / (dsf.size());
 	glPointSize(cell_size/pixel_size);
 	glBegin(GL_POINTS);
-	float y = -range + center_ypos; 
+	float y = -range + center_ypos + cell_size / 2.;
 	float x = 0;
 	for (auto &&it_y : dsf.fd) {
-		x = -range + center_xpos;
+		x = -range + center_xpos + cell_size/2.;
 		for (auto &&it_x : it_y) {
 			inverse = -it_x;
 			glColor3f(it_x*decrement,-it_x*inverse*decrement,inverse*decrement);

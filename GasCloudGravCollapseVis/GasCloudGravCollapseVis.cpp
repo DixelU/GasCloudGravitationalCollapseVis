@@ -2317,21 +2317,21 @@ void mDisplay() {
 	glClear(GL_COLOR_BUFFER_BIT);
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
-
+		/*
 		for (int y = 0; y < dsf.size(); y++) {
 			for (int x = 0; x < dsf.size(); x++) {
-				dsf[y][x] = (fsize/10)/sqrt((fsize /2 - y)*(fsize /2 - y) + (fsize/2 - x)*(fsize/2 - x) + (fsize/10));
+				dsf[y][x] = 0.25;
 			}
-		}
-		//randomise_dsfield(dsf,2,0,1.,5);
+		}*/
+		randomise_dsfield(dsf,2,0.5,1.5,5);
 
 		thread th([&]() {
 			while (true) {
 				for (int y = 0; y < dsf.size(); y++) {
 					for (int x = 0; x < dsf.size(); x++) {
-						dsf_buffer[y][x] = dsf[y][x] - 0.001*(
-							d_h2::DF_2_order(dsf, x, y, d::dx) +
-							d_h2::DF_2_order(dsf, x, y, d::dy)
+						dsf_buffer[y][x] = dsf[y][x] + 0.01*(
+							d_h4::DF_2_order(dsf, x, y, d::dx) +
+							d_h4::DF_2_order(dsf, x, y, d::dy)
 						);
 					}
 				}
