@@ -32,13 +32,13 @@ typedef struct drawable_square_field {
 	double at(int64_t x, int64_t y) const {
 		if (x >= 0 && x < field_size && y >= 0 && y < field_size)
 			return fd[y][x];
-		else return 0;
+		else return outside_val;
 	}
 	double& at(int64_t x, int64_t y) {
 		if (x >= 0 && x < field_size && y >= 0 && y < field_size)
 			return fd[y][x];
 		else
-			return garbage_var=0;
+			return (garbage_var = outside_val);
 	}
 	line& operator[](int64_t N) {
 		return fd[N];

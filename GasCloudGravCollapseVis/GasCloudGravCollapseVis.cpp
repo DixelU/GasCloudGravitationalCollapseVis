@@ -2308,7 +2308,7 @@ void Init() {
 #include "grav_eq_iterator.h"
 
 
-constexpr double fsize = 200;
+constexpr double fsize =  100;
 dsfield dsf(fsize);
 dsfield dsf_buffer(fsize);
 
@@ -2323,7 +2323,7 @@ void mDisplay() {
 				dsf[y][x] = 0.25;
 			}
 		}*/
-		randomise_dsfield(dsf,2,0.5,1.5,5);
+		randomise_dsfield(dsf,2,0.5,2.,5);
 
 		thread th([&]() {
 			while (true) {

@@ -32,72 +32,30 @@ struct greqit {
 
 namespace d_h2 {
 	inline double _finite_difference_1st_order_x(dsfield &dsf, size_t x, size_t y) {
-		size_t dsf_edge = dsf.size() - 1;
-		if (x > 0 && x < dsf_edge)
-			return (
-				dsf[y][x + 1] 
-				- dsf[y][x - 1]
-			)*0.5;
-		else {
-			int32_t pdx = (!x ? 1 : -1);
-			return pdx*(
-				-0.5 * dsf[y][x + 2*pdx] 
-				+ 2.*dsf[y][x + pdx] 
-				- 1.5*dsf[y][x]
-			);
-		}
+		return (
+			dsf.at(x + 1, y)
+			- dsf.at(x - 1, y)
+		)*0.5;
 	}
 	inline double _finite_difference_1st_order_y(dsfield &dsf, size_t x, size_t y) {
-		size_t dsf_edge = dsf.size() - 1;
-		if (y > 0 && y < dsf_edge)
-			return (
-				dsf[y + 1][x] 
-				- dsf[y - 1][x]
-			)*0.5;
-		else {
-			int32_t pdy = (!y ? 1 : -1);
-			return pdy*(
-				-0.5*dsf[y + 2 * pdy][x] 
-				+ dsf[y + pdy][x] * 2. 
-				- 1.5*dsf[y][x]
-			);
-		}
+		return (
+			dsf.at(x + 1, y)
+			- dsf.at(x - 1, y)
+		)*0.5;
 	}
 	inline double _finite_difference_2nd_order_xx(dsfield &dsf, size_t x, size_t y) {
-		size_t dsf_edge = dsf.size() - 1;
-		if (x > 0 && x < dsf_edge)
-			return (
-				dsf[y][x - 1] 
-				- 2.*dsf[y][x] 
-				+ dsf[y][x + 1]
-			);
-		else {
-			int32_t pdx = (!x ? 1 : -1);
-			return (
-				2 * dsf[y][x] 
-				- 5 * dsf[y][x + pdx] 
-				+ 4 * dsf[y][x + pdx * 2] 
-				- dsf[y][x + pdx * 3]
-			);
-		}
+		return (
+			dsf.at(x - 1, y)
+			- 2.*dsf.at(x, y)
+			+ dsf.at(x + 1, y)
+		);
 	}
 	inline double _finite_difference_2nd_order_yy(dsfield &dsf, size_t x, size_t y) {
-		size_t dsf_edge = dsf.size() - 1;
-		if (y > 0 && y < dsf_edge)
-			return (
-				dsf[y - 1][x] 
-				- 2.*dsf[y][x] 
-				+ dsf[y + 1][x]
-			);
-		else {
-			int32_t pdy = (!y ? 1 : -1);
-			return (
-				2 * dsf[y][x] 
-				- 5 * dsf[y + pdy][x] 
-				+ 4 * dsf[y + pdy * 2][x] 
-				- dsf[y + pdy * 3][x]
-			);
-		}
+		return (
+			dsf.at(x, y - 1)
+			- 2.*dsf.at(x, y)
+			+ dsf.at(x, y + 1)
+		);
 	}
 	inline double DF_2_order(dsfield &dsf, size_t x, size_t y, d diff) {
 		switch (diff) {
@@ -117,88 +75,38 @@ namespace d_h2 {
 
 namespace d_h4 {
 	inline double _finite_difference_1st_order_x(dsfield &dsf, size_t x, size_t y) {
-		size_t dsf_edge = dsf.size() - 2;
-		if (x > 1 && x < dsf_edge)
-			return (
-				.25 * dsf[y][x - 2] 
-				- 2 * dsf[y][x - 1] 
-				+ 2 * dsf[y][x + 1] 
-				-.25* dsf[y][x + 2]
-				) / 3.;
-		else {
-			int32_t pdx = (x > 1 ? -1 : 1);
-			return pdx*(
-				-6.25*dsf[y][x]
-				+ 12. * dsf[y][x + pdx]
-				- 9. * dsf[y][x + 2*pdx]
-				+ 4. * dsf[y][x + 3*pdx]
-				- 0.75 * dsf[y][x + 4*pdx]
-			)/3.;
-		}
+		return (
+			.25 * dsf.at(x - 2, y)
+			- 2 * dsf.at(x - 1, y)
+			+ 2 * dsf.at(x + 1, y)
+			-.25* dsf.at(x + 2, y)
+		) / 3.;
 	}
 	inline double _finite_difference_1st_order_y(dsfield &dsf, size_t x, size_t y) {
-		size_t dsf_edge = dsf.size() - 2;
-		if (y > 1 && y < dsf_edge)
-			return (
-				.25 * dsf[y - 2][x]  
-				- 2 * dsf[y - 1][x] 
-				+ 2 * dsf[y + 1][x] 
-				-.25* dsf[y + 2][x]
-			) / 3.;
-		else {
-			int32_t pdy = (y > 1 ? -1 : 1);
-			return pdy * (
-				-6.25*dsf[y][x]
-				+ 12. * dsf[y + pdy][x]
-				- 9. * dsf[y + 2 * pdy][x]
-				+ 4. * dsf[y + 3 * pdy][x]
-				- 0.75 * dsf[y + 4 * pdy][x]
-				) / 3.;
-		}
+		return (
+			.25 * dsf.at(x, y- 2)
+			- 2 * dsf.at(x, y - 1)
+			+ 2 * dsf.at(x, y + 1)
+			-.25* dsf.at(x, y + 2)
+		) / 3.;
 	}
 	inline double _finite_difference_2nd_order_xx(dsfield &dsf, size_t x, size_t y) {
-		size_t dsf_edge = dsf.size() - 2;
-		if (x > 1 && x < dsf_edge)
-			return (
-				- .25 * dsf[y][x - 2]  
-				+ 4. * dsf[y][x - 1]
-				- 7.5 * dsf[y][x    ]
-				+ 4. * dsf[y][x + 1]
-				- .25 * dsf[y][x + 2] 
-				) / 3.;
-		else {
-			int32_t pdx = (x < 2 ? 1 : -1);
-			return (
-				11.25*dsf[y][x]
-				- 38.5*dsf[y][x + pdx]
-				+ 53.5*dsf[y][x + 2*pdx]
-				- 39.*dsf[y][x + 3*pdx]
-				+ 15.25*dsf[y][x + 4*pdx]
-				- 2.5*dsf[y][x + 5*pdx]
+		return (
+			-.25 * dsf.at(x - 2, y)
+			+ 4. * dsf.at(x - 1, y)
+			- 7.5 * dsf.at(x, y)
+			+ 4. * dsf.at(x + 1, y)
+			- .25 * dsf.at(x + 2, y)
 			) / 3.;
-		}
 	}
 	inline double _finite_difference_2nd_order_yy(dsfield &dsf, size_t x, size_t y) {
-		size_t dsf_edge = dsf.size() - 2;
-		if (y > 1 && y < dsf_edge)
-			return (
-				- .25 * dsf[y - 2][x]
-				+ 4. * dsf[y - 1][x]
-				- 7.5 * dsf[y    ][x]
-				+ 4. * dsf[y + 1][x]
-				- .25 * dsf[y + 2][x]
-				) / 3.;
-		else {
-			int32_t pdy = (y < 2 ? 1 : -1);
-			return (
-				11.25*dsf[y][x]
-				- 38.5*dsf[y + pdy][x]
-				+ 53.5*dsf[y + 2 * pdy][x]
-				- 39.*dsf[y + 3 * pdy][x]
-				+ 15.25*dsf[y + 4 * pdy][x]
-				- 2.5*dsf[y + 5 * pdy][x]
-				) / 3.;
-		}
+		return (
+			- .25 * dsf.at(x, y - 2)
+			+ 4. * dsf.at(x, y - 1)
+			- 7.5 * dsf.at(x, y)
+			+ 4. * dsf.at(x, y + 1)
+			- .25 * dsf.at(x, y + 2)
+		) / 3.;
 	}
 	inline double DF_2_order(dsfield &dsf, size_t x, size_t y, d diff) {
 		switch (diff) {
