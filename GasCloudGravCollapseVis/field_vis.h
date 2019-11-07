@@ -6,9 +6,10 @@
 
 namespace fv_utils {
 	std::default_random_engine gen;
+	std::mt19937 mtrand(gen);
 	std::uniform_real_distribution<double> distr(0., 1.);
 	inline double rdrand() {
-		return distr(gen);
+		return distr(mtrand);
 	}
 }
 
@@ -83,7 +84,7 @@ void randomise_dsfield(dsfield& dsf, int64_t rastr_rad, double offset = 0.5, dou
 }
 
 
-inline void draw_dsfield(const dsfield& dsf, float center_xpos, float center_ypos, float range, float pixel_size, const float decrement = 1.) {
+inline void draw_dsfield(const dsfield& dsf, float center_xpos, float center_ypos, float range, float pixel_size, float decrement = 1.) {
 	float ym = range + center_ypos, xm = range + center_xpos, inverse, cell_size = 2 * range / (dsf.size());
 	glPointSize(cell_size/pixel_size);
 	glBegin(GL_POINTS);

@@ -1843,6 +1843,134 @@ struct Slider :HandleableUIPart {
 	}
 };
 
+struct WheelVariableChanger :HandleableUIPart {
+	enum class Type { exponential, addictable };
+	Type type;
+	InputField *var_if, *fac_if;
+	float Width, Height;
+	float Xpos, Ypos;
+	string var_s, fact_s;
+	double variable;
+	double factor;
+	bool IsHovered, WheelFieldHovered;
+	void(*OnEnter)(double);
+	~WheelVariableChanger() {
+		if (var_if)
+			delete var_if;
+		if (var_if)
+			delete fac_if;
+	}
+	WheelVariableChanger(void(*OnEnter)(double),float Xpos, float Ypos, double default_var, double default_fact, SingleTextLineSettings *STLS, string var_string = " ", string fac_string = " ", Type type = Type::exponential) : Width(100), Height(50) {
+		this->OnEnter = OnEnter;
+		this->Xpos = Xpos;
+		this->Ypos = Ypos;
+		this->variable = default_var;
+		this->factor = default_fact;
+		this->IsHovered = WheelFieldHovered = false;
+		this->type = type;
+		var_if = new InputField(to_string(default_var), Xpos - 25., Ypos + 15, 10, 40, STLS, nullptr, 0x007FFFFF, STLS, var_string, 8, _Align::center, _Align::center, InputField::Type::FP_Any);
+		fac_if = new InputField(to_string(default_fact), Xpos - 25., Ypos- 5 , 10, 40, STLS, nullptr, 0x007FFFFF, STLS, fac_string, 8, _Align::center, _Align::center, InputField::Type::FP_PositiveNumbers);
+	}
+	void Draw() override {
+		GLCOLOR(0xFFFFFF3F + WheelFieldHovered*0x3F);
+		glBegin(GL_QUADS);
+		glVertex2f(Xpos, Ypos + 25);
+		glVertex2f(Xpos, Ypos - 25);
+		glVertex2f(Xpos + 50, Ypos - 25);
+		glVertex2f(Xpos + 50, Ypos + 25);
+		glEnd();
+		GLCOLOR((0x007FFF3F + WheelFieldHovered * 0x3F));
+		glBegin(GL_LINE_LOOP);
+		glVertex2f(Xpos, Ypos + 25);
+		glVertex2f(Xpos, Ypos - 25);
+		glVertex2f(Xpos + 50, Ypos - 25);
+		glVertex2f(Xpos + 50, Ypos + 25);
+		glEnd();
+		glBegin(GL_LINE_LOOP);
+		glVertex2f(Xpos - 50, Ypos + 25);
+		glVertex2f(Xpos - 50, Ypos - 25);
+		glVertex2f(Xpos + 50, Ypos - 25);
+		glVertex2f(Xpos + 50, Ypos + 25);
+		glEnd();
+		var_if->Draw();
+		fac_if->Draw();
+	}
+	void SafeMove(float dx, float dy) override {
+		Xpos += dx;
+		Ypos += dy;
+		var_if->SafeMove(dx, dy);
+		fac_if->SafeMove(dx, dy);
+	}
+	void SafeChangePosition(float NewX, float NewY) override {
+		NewX -= Xpos;
+		NewY -= Ypos;
+		SafeMove(NewX, NewY);
+	}
+	void SafeChangePosition_Argumented(BYTE Arg, float NewX, float NewY) override {
+		float CW = 0.5f*(
+			(INT32)((BIT)(GLOBAL_LEFT&Arg))
+			- (INT32)((BIT)(GLOBAL_RIGHT&Arg))
+			)*Width,
+			CH = 0.5f*(
+			(INT32)((BIT)(GLOBAL_BOTTOM&Arg))
+				- (INT32)((BIT)(GLOBAL_TOP&Arg))
+				)*Height;
+		SafeChangePosition(NewX + CW, NewY + CH);
+	}
+	void KeyboardHandler(CHAR CH) override {
+		fac_if->KeyboardHandler(CH);
+		var_if->KeyboardHandler(CH);
+		if (IsHovered) {
+			if (CH == 13) {
+				variable = stod(var_if->STL->_CurrentText);
+				factor = stod(fac_if->STL->_CurrentText);
+				if (OnEnter)
+					OnEnter(variable);
+			}
+		}
+	}
+	void SafeStringReplace(string Meaningless) override {
+
+	}
+	BIT MouseHandler(float mx, float my, CHAR Button, CHAR State) override {
+		this->fac_if->MouseHandler(mx, my, Button, State);
+		this->var_if->MouseHandler(mx, my, Button, State);
+		mx -= Xpos;
+		my -= Ypos;
+		if (fabsf(mx) < Width*0.5 && fabsf(my) < Height*0.5) {
+			IsHovered = true;
+			if (mx >= 0 && mx <= Width * 0.5 && fabsf(my) < Height*0.5) {
+				WheelFieldHovered = true;
+				if (Button) {
+					if (Button == 2 /*UP*/) {
+						if (State == -1) {
+							switch (type){
+							case WheelVariableChanger::Type::exponential: {variable *= factor; break; }
+							case WheelVariableChanger::Type::addictable: {variable += factor;	break; }
+							}
+							var_if->UpdateInputString(to_string(variable));
+						}
+					}
+					else if (Button == 3 /*DOWN*/) {
+						if (State == -1) {
+							switch (type) {
+							case WheelVariableChanger::Type::exponential: {variable /= factor; break; }
+							case WheelVariableChanger::Type::addictable: {variable -= factor;	break; }
+							}
+							var_if->UpdateInputString(to_string(variable));
+						}
+					}
+				}
+			}
+		}
+		else {
+			IsHovered = false;
+			WheelFieldHovered = false;
+		}
+		return 0;
+	}
+};
+
 #define WindowHeapSize 15
 struct MoveableWindow :HandleableUIPart {
 	float XWindowPos, YWindowPos;//leftup corner coordinates
@@ -2294,11 +2422,57 @@ WindowsHandler* WH;
 ////TRUE USAGE STARTS HERE////
 //////////////////////////////
 
-void Init() {
-	/*auto T = new MoveableWindow("Settings Window", STLS_WhiteSmall, -200, 200, 100, 400, 0x1, 0x7F7F7F7F);
 
-	(*WH)["SWM"] = T;
-	WH->MainWindow_ID = "SWM";*/
+struct FieldAdapter : HandleableUIPart {
+	dsfield *dsf;
+	float x, y, side_size, pixel_size, brightness;
+	int64_t hovered_x, hovered_y;
+	FieldAdapter(dsfield *dsf,float x, float y,float side_size,float pixel_size,float brightness) {
+		this->dsf = dsf;
+		this->x = x;
+		this->y = y;
+		this->side_size = side_size;
+		this->pixel_size = pixel_size;
+		this->brightness = brightness;
+	}
+	void Draw() override {
+		draw_dsfield(*dsf, x, y, side_size*0.5, pixel_size, brightness);
+	}
+	void SafeMove(float dx, float dy) override {
+		x += dx;
+		y += dy;
+	}
+	void SafeChangePosition(float NewX, float NewY) override {
+		x = NewX;
+		y = NewY;
+	}
+	void SafeChangePosition_Argumented(BYTE Arg, float NewX, float NewY) override {
+
+	}
+	void KeyboardHandler(CHAR CH) override {
+		return;
+	}
+	void SafeStringReplace(string Meaningless) override {
+		return;
+	}
+	BIT MouseHandler(float mx, float my, CHAR Button, CHAR State) override {
+		return 0;
+	}
+};
+
+FieldAdapter *Field_Adapter_ptr = new FieldAdapter(nullptr, 0, 0, 400, 2 * RANGE / (min(WindX, WindY)), 1.);
+
+void OnWheel_EnterPress(double var) {
+	Field_Adapter_ptr->brightness = var;
+}
+
+void Init() {
+	auto T = new MoveableWindow("Field window", STLS_WhiteSmall, -325, 200 + WindowHeapSize, 525, 400 + WindowHeapSize, 0xFF, 0x7F7F7F7F);
+	(*T)["WHEEL"] = new WheelVariableChanger(OnWheel_EnterPress,-260, 175 - WindowHeapSize, 1, 1.5, STLS_WhiteSmall, "Brightness", "Delta");
+	(*T)["FIELD"] = Field_Adapter_ptr;
+
+	(*WH)["FWD"] = T;
+	WH->MainWindow_ID = "FWD";
 }
 
 ///////////////////////////////////////
@@ -2329,7 +2503,7 @@ void mDisplay() {
 			while (true) {
 				for (int y = 0; y < dsf.size(); y++) {
 					for (int x = 0; x < dsf.size(); x++) {
-						dsf_buffer[y][x] = dsf[y][x] + 0.01*(
+						dsf_buffer[y][x] = dsf[y][x] + 0.1*(
 							d_h4::DF_2_order(dsf, x, y, d::dx) +
 							d_h4::DF_2_order(dsf, x, y, d::dy)
 						);
@@ -2346,12 +2520,12 @@ void mDisplay() {
 		ANIMATION_IS_ACTIVE = !ANIMATION_IS_ACTIVE;
 		onTimer(0);
 	}
-	double cell_size = 2 * RANGE / (min(WindX, WindY));
+	Field_Adapter_ptr->dsf = &dsf;
+	//double cell_size = 2 * RANGE / (min(WindX, WindY));
 
-	draw_dsfield(dsf, 0, 0, 200, cell_size);
+	//draw_dsfield(dsf, 0, 0, 200, cell_size);
 
 	WH->Draw();
-
 	glutSwapBuffers();
 }
 void mInit() {
