@@ -1868,7 +1868,7 @@ struct WheelVariableChanger :HandleableUIPart {
 		this->factor = default_fact;
 		this->IsHovered = WheelFieldHovered = false;
 		this->type = type;
-		var_if = new InputField(to_string(default_var), Xpos - 25., Ypos + 15, 10, 40, STLS, nullptr, 0x007FFFFF, STLS, var_string, 8, _Align::center, _Align::center, InputField::Type::FP_Any);
+		var_if = new InputField(to_string(default_var), Xpos - 25., Ypos + 15, 10, 40, STLS, nullptr, 0x007FFFFF, STLS, var_string, 8, _Align::center, _Align::center, InputField::Type::FP_PositiveNumbers);
 		fac_if = new InputField(to_string(default_fact), Xpos - 25., Ypos- 5 , 10, 40, STLS, nullptr, 0x007FFFFF, STLS, fac_string, 8, _Align::center, _Align::center, InputField::Type::FP_PositiveNumbers);
 	}
 	void Draw() override {
@@ -2482,7 +2482,7 @@ void Init() {
 #include "grav_eq_iterator.h"
 
 
-constexpr double fsize =  100;
+constexpr double fsize = 100;
 dsfield dsf(fsize);
 dsfield dsf_buffer(fsize);
 
@@ -2503,7 +2503,7 @@ void mDisplay() {
 			while (true) {
 				for (int y = 0; y < dsf.size(); y++) {
 					for (int x = 0; x < dsf.size(); x++) {
-						dsf_buffer[y][x] = dsf[y][x] + 0.1*(
+						dsf_buffer[y][x] = dsf[y][x] + 0.01*(
 							d_h4::DF_2_order(dsf, x, y, d::dx) +
 							d_h4::DF_2_order(dsf, x, y, d::dy)
 						);
