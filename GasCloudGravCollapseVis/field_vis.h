@@ -9,7 +9,7 @@ namespace fv_utils {
 	std::mt19937 mtrand(gen);
 	std::uniform_real_distribution<double> distr(0., 1.);
 	inline double rdrand() {
-		return distr(mtrand);
+		return distr(gen);
 	}
 }
 
@@ -85,7 +85,7 @@ void randomise_dsfield(dsfield& dsf, int64_t rastr_rad, double offset = 0.5, dou
 
 
 inline void draw_dsfield(const dsfield& dsf, float center_xpos, float center_ypos, float range, float pixel_size, float decrement = 1.) {
-	float ym = range + center_ypos, xm = range + center_xpos, inverse, cell_size = 2 * range / (dsf.size());
+	float ym = range + center_ypos, xm = range + center_xpos, inverse, orig, cell_size = 2 * range / (dsf.size());
 	glPointSize(cell_size/pixel_size);
 	glBegin(GL_POINTS);
 	float y = -range + center_ypos + cell_size / 2.;
@@ -93,8 +93,9 @@ inline void draw_dsfield(const dsfield& dsf, float center_xpos, float center_ypo
 	for (auto &&it_y : dsf.fd) {
 		x = -range + center_xpos + cell_size/2.;
 		for (auto &&it_x : it_y) {
-			inverse = -it_x;
-			glColor3f(it_x*decrement,-it_x*inverse*decrement,inverse*decrement);
+			orig = it_x*decrement;
+			inverse = -orig;
+			glColor3f(orig,-orig*inverse,inverse);
 			glVertex2f(x, y);
 			x += cell_size;
 		}

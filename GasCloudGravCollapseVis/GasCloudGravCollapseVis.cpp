@@ -1845,7 +1845,9 @@ struct Slider :HandleableUIPart {
 
 struct WheelVariableChanger :HandleableUIPart {
 	enum class Type { exponential, addictable };
+	enum class Sensitivity {on_enter,on_click,on_wheel};
 	Type type;
+	Sensitivity Sen;
 	InputField *var_if, *fac_if;
 	float Width, Height;
 	float Xpos, Ypos;
@@ -1853,21 +1855,22 @@ struct WheelVariableChanger :HandleableUIPart {
 	double variable;
 	double factor;
 	bool IsHovered, WheelFieldHovered;
-	void(*OnEnter)(double);
+	void(*OnApply)(double);
 	~WheelVariableChanger() {
 		if (var_if)
 			delete var_if;
 		if (var_if)
 			delete fac_if;
 	}
-	WheelVariableChanger(void(*OnEnter)(double),float Xpos, float Ypos, double default_var, double default_fact, SingleTextLineSettings *STLS, string var_string = " ", string fac_string = " ", Type type = Type::exponential) : Width(100), Height(50) {
-		this->OnEnter = OnEnter;
+	WheelVariableChanger(void(*OnApply)(double),float Xpos, float Ypos, double default_var, double default_fact, SingleTextLineSettings *STLS, string var_string = " ", string fac_string = " ", Type type = Type::exponential) : Width(100), Height(50) {
+		this->OnApply = OnApply;
 		this->Xpos = Xpos;
 		this->Ypos = Ypos;
 		this->variable = default_var;
 		this->factor = default_fact;
 		this->IsHovered = WheelFieldHovered = false;
 		this->type = type;
+		this->Sen = Sensitivity::on_wheel;
 		var_if = new InputField(to_string(default_var), Xpos - 25., Ypos + 15, 10, 40, STLS, nullptr, 0x007FFFFF, STLS, var_string, 8, _Align::center, _Align::center, InputField::Type::FP_PositiveNumbers);
 		fac_if = new InputField(to_string(default_fact), Xpos - 25., Ypos- 5 , 10, 40, STLS, nullptr, 0x007FFFFF, STLS, fac_string, 8, _Align::center, _Align::center, InputField::Type::FP_PositiveNumbers);
 	}
@@ -1924,8 +1927,8 @@ struct WheelVariableChanger :HandleableUIPart {
 			if (CH == 13) {
 				variable = stod(var_if->STL->_CurrentText);
 				factor = stod(fac_if->STL->_CurrentText);
-				if (OnEnter)
-					OnEnter(variable);
+				if (OnApply)
+					OnApply(variable);
 			}
 		}
 	}
@@ -1940,6 +1943,9 @@ struct WheelVariableChanger :HandleableUIPart {
 		if (fabsf(mx) < Width*0.5 && fabsf(my) < Height*0.5) {
 			IsHovered = true;
 			if (mx >= 0 && mx <= Width * 0.5 && fabsf(my) < Height*0.5) {
+				if(Sen==Sensitivity::on_click && State==1)
+					if (OnApply)
+						OnApply(variable);
 				WheelFieldHovered = true;
 				if (Button) {
 					if (Button == 2 /*UP*/) {
@@ -1949,6 +1955,9 @@ struct WheelVariableChanger :HandleableUIPart {
 							case WheelVariableChanger::Type::addictable: {variable += factor;	break; }
 							}
 							var_if->UpdateInputString(to_string(variable));
+							if(Sen==Sensitivity::on_wheel)
+								if (OnApply)
+									OnApply(variable);
 						}
 					}
 					else if (Button == 3 /*DOWN*/) {
@@ -1958,6 +1967,9 @@ struct WheelVariableChanger :HandleableUIPart {
 							case WheelVariableChanger::Type::addictable: {variable -= factor;	break; }
 							}
 							var_if->UpdateInputString(to_string(variable));
+							if (Sen == Sensitivity::on_wheel)
+								if (OnApply)
+									OnApply(variable);
 						}
 					}
 				}
@@ -2483,44 +2495,61 @@ void Init() {
 
 
 constexpr double fsize = 100;
-dsfield dsf(fsize);
-dsfield dsf_buffer(fsize);
+greqit grei(fsize);
+greqit grei_buffer(fsize);
+volatile int threads_count = thread::hardware_concurrency()-1, completed_count = 0, completed_flag=0;
 
 void onTimer(int v);
 void mDisplay() {
 	glClear(GL_COLOR_BUFFER_BIT);
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
-		/*
-		for (int y = 0; y < dsf.size(); y++) {
-			for (int x = 0; x < dsf.size(); x++) {
-				dsf[y][x] = 0.25;
-			}
-		}*/
-		randomise_dsfield(dsf,2,0.5,2.,5);
 
-		thread th([&]() {
-			while (true) {
-				for (int y = 0; y < dsf.size(); y++) {
-					for (int x = 0; x < dsf.size(); x++) {
-						dsf_buffer[y][x] = dsf[y][x] + 0.01*(
-							d_h4::DF_2_order(dsf, x, y, d::dx) +
-							d_h4::DF_2_order(dsf, x, y, d::dy)
-						);
+		dsfield dsf(fsize);
+
+		randomise_dsfield(dsf, 5, 0.1, 1.1, 2);
+		grei.density.swap(dsf);
+		
+		for (int thi = 0; thi < threads_count; thi++) {
+			thread th([&](int thid) {
+				while (true) {
+					int64_t start = thid * grei.size() / threads_count;
+					int64_t end = (thid + 1) * grei.size() / threads_count;
+					for (int64_t x = start; x < end; x++) {
+						for (int64_t y = 0; y < grei.size(); y++) {
+							gc_iter::process_single_point_h4(grei, grei_buffer, x, y);
+						}
+					}
+					completed_count++;
+					while (!completed_flag) {
+						Sleep(1);
+						printf("thsleep%d|%d\n", thid, completed_count);
 					}
 				}
-				dsf.swap(dsf_buffer);
+			}, thi);
+			th.detach();
+		}
+		thread thwrk([&]() {
+			while (true) {
+				Sleep(10);
+				if (completed_count == threads_count) {
+					grei.swap(grei_buffer);
+					printf("\tthswap%d\n", completed_count);
+					completed_count = 0;
+					completed_flag = 1;
+				}
+				else
+					completed_flag = 0;
 			}
-		});
-		th.detach();
-
+		}); 
+		thwrk.detach();
 		WH = new WindowsHandler();
 		Init();
 		
 		ANIMATION_IS_ACTIVE = !ANIMATION_IS_ACTIVE;
 		onTimer(0);
 	}
-	Field_Adapter_ptr->dsf = &dsf;
+	Field_Adapter_ptr->dsf = &grei.density;
 	//double cell_size = 2 * RANGE / (min(WindX, WindY));
 
 	//draw_dsfield(dsf, 0, 0, 200, cell_size);
