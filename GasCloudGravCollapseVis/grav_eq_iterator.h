@@ -2,6 +2,10 @@
 #include <thread>
 #include "field_vis.h"
 #include "weird_hacks.h"
+#include "fftw3.h"
+
+#pragma comment (lib, "libfftw3-3.lib")
+
 using namespace std;
 
 
@@ -16,7 +20,7 @@ struct greqit {
 		x_force,
 		y_force,
 		temperature;
-	greqit(size_t n, double initial_temp = 10.) {
+	greqit(size_t n, double initial_temp = 1.) {
 		density = dsfield(n);
 		x_speed = dsfield(n);
 		y_speed = dsfield(n);
@@ -29,7 +33,7 @@ struct greqit {
 			}
 		}
 	}
-	greqit(const dsfield &dsf_p, double initial_temp = 10.) {
+	greqit(const dsfield &dsf_p, double initial_temp = 1.) {
 		density = dsf_p;
 		x_speed = dsfield(dsf_p.size());
 		y_speed = dsfield(dsf_p.size());
@@ -42,7 +46,7 @@ struct greqit {
 			}
 		}
 	}
-	greqit(const dsfield &dsf_p, const dsfield &dsf_vx, const dsfield &dsf_vy, double initial_temp = 10.) {
+	greqit(const dsfield &dsf_p, const dsfield &dsf_vx, const dsfield &dsf_vy, double initial_temp = 1.) {
 		density = dsf_p;
 		x_speed = dsf_vx;
 		y_speed = dsf_vy;
@@ -212,7 +216,7 @@ namespace d_op {
 }
 
 namespace gc_iter {
-	int64_t fsize = 125;
+	int64_t fsize = 200;
 	double iter_speed=0.05;
 	double pressure_transform_coef = 5;
 	double grav_const = 0.001;
@@ -223,16 +227,8 @@ namespace gc_iter {
 	greqit grei_buffer(fsize);
 	dsfield fourier_coef, fourier_coef_buffer;
 	volatile int* f_flags = nullptr;//if the thread completed cycle, it sets f_flags[thid] to one and waits until it will be set back to zero
-	void heat_eq_test_h2_at(int64_t x, int64_t y) {
-		grei_buffer.density.at(x, y) = grei_base.density.at(x, y) + iter_speed * (
-			d_h2::DF_2_order(grei_base.density, x, y, d::dx) + d_h2::DF_2_order(grei_base.density, x, y, d::dy)
-			);
-	}
-	void heat_eq_test_h4_at(int64_t x, int64_t y) {
-		grei_buffer.density.at(x, y) = grei_base.density.at(x, y) + iter_speed * (
-			d_h4::DF_2_order(grei_base.density, x, y, d::dx) + d_h4::DF_2_order(grei_base.density, x, y, d::dy)
-			);
-	}
+	
+
 	void iter_grei_at(int64_t x, int64_t y) {
 		double lambx = 0, lamby = 0;
 		grei_buffer.density.at(x, y) = grei_base.density.at(x,y) + iter_speed*(
@@ -279,10 +275,12 @@ namespace gc_iter {
 					else {
 						for (int64_t x = start; x < end; x++) {
 							for (int64_t y = 0; y < grei_base.size(); y++) {
-								heat_eq_test_h4_at(x, y);
+								
+								iter_grei_at(x, y);
 							}
 						}
 					}
+					//Sleep(1000);
 					f_flags[thi] = 0;
 					while (!f_flags[thi] || iter_pause) {
 						Sleep(5);

@@ -2521,6 +2521,7 @@ void mDisplay() {
 		//dsfield xspeed(gc_iter::fsize);
 
 		randomise_dsfield(dsf, 5, 0.5, 4, 2);
+
 		//randomise_dsfield(xspeed, 5, 0, 4, 2);
 		gc_iter::grei_base.density.swap(dsf);
 		//gc_iter::grei_base.density.swap(xspeed);
