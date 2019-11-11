@@ -9,7 +9,7 @@ namespace fv_utils {
 	std::mt19937 mtrand(gen);
 	std::uniform_real_distribution<double> distr(0., 1.);
 	inline double rdrand() {
-		return distr(gen);
+		return distr(mtrand);
 	}
 }
 

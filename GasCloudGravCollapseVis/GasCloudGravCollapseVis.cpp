@@ -1222,6 +1222,7 @@ struct TextBox : HandleableUIPart {
 		Lines.clear();
 	}
 	TextBox(string Text, SingleTextLineSettings *STLS, float Xpos, float Ypos, float Height, float Width, float VerticalOffset, DWORD RGBABackground, DWORD RGBABorder, BYTE BorderWidth, _Align TextAlign = _Align::left, VerticalOverflow VOverflow = VerticalOverflow::cut) {
+		if (!Text.size())Text = " ";
 		this->Lock = 0;
 		this->TextAlign = TextAlign;
 		this->VOverflow = VOverflow;
@@ -1455,11 +1456,13 @@ struct SelectablePropertedList : HandleableUIPart {
 				if (Selectors[i]->MouseHandler(mx, my, Button, State) && flag) {
 					if (Button == -1) {
 						SelectedID = i + CurrentTopLineID;
-						if (OnSelect)OnSelect(i + CurrentTopLineID);
+						if (OnSelect)
+							OnSelect(i + CurrentTopLineID);
 					}
 					if (Button == 1) {
 						//cout << "PROP\n";
-						if (OnGetProperties)OnGetProperties(i + CurrentTopLineID);
+						if (OnGetProperties)
+							OnGetProperties(i + CurrentTopLineID);
 					}
 					flag = 0;
 					return 1;
@@ -2468,11 +2471,24 @@ struct FieldAdapter : HandleableUIPart {
 		return;
 	}
 	BIT MouseHandler(float mx, float my, CHAR Button, CHAR State) override {
+		if (fabsf(mx - x) < 0.5*side_size && fabsf(my - y) < 0.5*side_size) {
+			mx = mx - x + 0.5*side_size;
+			my = my - y + 0.5*side_size;
+			mx = mx / side_size * dsf->size();
+			my = my / side_size * dsf->size();
+			hovered_x = mx;
+			hovered_y = my;
+		}
+		else {
+			hovered_x = -1;
+			hovered_y = -1;
+		}
 		return 0;
 	}
 };
 
 FieldAdapter *Field_Adapter_ptr = new FieldAdapter(nullptr, 0, 0, 400, 2 * RANGE / (min(WindX, WindY)), 1.);
+TextBox *TB_ptr = new TextBox("", STLS_WhiteSmall, -260, 137.5 - WindowHeapSize, 10, 70, 10, 0, 0xFFFFFFFF, 1, _Align::center);
 
 void OnWheel_EnterPress(double var) {
 	Field_Adapter_ptr->brightness = var;
@@ -2482,6 +2498,7 @@ void Init() {
 	auto T = new MoveableWindow("Field window", STLS_WhiteSmall, -325, 200 + WindowHeapSize, 525, 400 + WindowHeapSize, 0xFF, 0x7F7F7F7F);
 	(*T)["WHEEL"] = new WheelVariableChanger(OnWheel_EnterPress,-260, 175 - WindowHeapSize, 1, 1.5, STLS_WhiteSmall, "Brightness", "Delta");
 	(*T)["FIELD"] = Field_Adapter_ptr;
+	(*T)["TEXTBOX"] = TB_ptr;
 
 	(*WH)["FWD"] = T;
 	WH->MainWindow_ID = "FWD";
@@ -2494,62 +2511,30 @@ void Init() {
 #include "grav_eq_iterator.h"
 
 
-constexpr double fsize = 100;
-greqit grei(fsize);
-greqit grei_buffer(fsize);
-volatile int threads_count = thread::hardware_concurrency()-1, completed_count = 0, completed_flag=0;
-
 void onTimer(int v);
 void mDisplay() {
 	glClear(GL_COLOR_BUFFER_BIT);
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
 
-		dsfield dsf(fsize);
+		dsfield dsf(gc_iter::fsize);
+		//dsfield xspeed(gc_iter::fsize);
 
-		randomise_dsfield(dsf, 5, 0.1, 1.1, 2);
-		grei.density.swap(dsf);
+		randomise_dsfield(dsf, 5, 0.5, 4, 2);
+		//randomise_dsfield(xspeed, 5, 0, 4, 2);
+		gc_iter::grei_base.density.swap(dsf);
+		//gc_iter::grei_base.density.swap(xspeed);
 		
-		for (int thi = 0; thi < threads_count; thi++) {
-			thread th([&](int thid) {
-				while (true) {
-					int64_t start = thid * grei.size() / threads_count;
-					int64_t end = (thid + 1) * grei.size() / threads_count;
-					for (int64_t x = start; x < end; x++) {
-						for (int64_t y = 0; y < grei.size(); y++) {
-							gc_iter::process_single_point_h4(grei, grei_buffer, x, y);
-						}
-					}
-					completed_count++;
-					while (!completed_flag) {
-						Sleep(1);
-						printf("thsleep%d|%d\n", thid, completed_count);
-					}
-				}
-			}, thi);
-			th.detach();
-		}
-		thread thwrk([&]() {
-			while (true) {
-				Sleep(10);
-				if (completed_count == threads_count) {
-					grei.swap(grei_buffer);
-					printf("\tthswap%d\n", completed_count);
-					completed_count = 0;
-					completed_flag = 1;
-				}
-				else
-					completed_flag = 0;
-			}
-		}); 
-		thwrk.detach();
+		gc_iter::create_iter_threads();
+
 		WH = new WindowsHandler();
 		Init();
 		
 		ANIMATION_IS_ACTIVE = !ANIMATION_IS_ACTIVE;
 		onTimer(0);
 	}
-	Field_Adapter_ptr->dsf = &grei.density;
+	Field_Adapter_ptr->dsf = &gc_iter::grei_base.density;
+	TB_ptr->SafeStringReplace(to_string(Field_Adapter_ptr->dsf->at(Field_Adapter_ptr->hovered_x, Field_Adapter_ptr->hovered_y)));
 	//double cell_size = 2 * RANGE / (min(WindX, WindY));
 
 	//draw_dsfield(dsf, 0, 0, 200, cell_size);
