@@ -2437,6 +2437,7 @@ WindowsHandler* WH;
 ////TRUE USAGE STARTS HERE////
 //////////////////////////////
 
+#include "grav_eq_iterator.h"
 
 struct FieldAdapter : HandleableUIPart {
 	dsfield *dsf;
@@ -2493,12 +2494,38 @@ TextBox *TB_ptr = new TextBox("", STLS_WhiteSmall, -260, 137.5 - WindowHeapSize,
 void OnWheel_EnterPress(double var) {
 	Field_Adapter_ptr->brightness = var;
 }
+void Pause() {
+	gc_iter::iter_pause ^= true;
+}
+void OnSelectPropList(int ID) {
+	cout << ID << endl;;
+	switch (ID) {
+	case 0:
+		Field_Adapter_ptr->dsf = &gc_iter::grei_base.density; break;
+	case 1:
+		Field_Adapter_ptr->dsf = &gc_iter::grei_base.temperature; break;
+	case 2:
+		Field_Adapter_ptr->dsf = &gc_iter::grei_base.x_speed; break;
+	case 3:
+		Field_Adapter_ptr->dsf = &gc_iter::grei_base.y_speed; break;
+	case 4:
+		Field_Adapter_ptr->dsf = &gc_iter::grei_base.x_force; break;
+	case 5:
+		Field_Adapter_ptr->dsf = &gc_iter::grei_base.y_force; break;
+	}
+}
+
+ButtonSettings *BS_List_Black_Small = new ButtonSettings(STLS_WhiteSmall, 0, 0, 100, 10, 1, 0, 0, 0xFFEFDFFF, 0x00003F7F, 0x7F7F7FFF);
 
 void Init() {
+	SelectablePropertedList *L;
 	auto T = new MoveableWindow("Field window", STLS_WhiteSmall, -325, 200 + WindowHeapSize, 525, 400 + WindowHeapSize, 0xFF, 0x7F7F7F7F);
 	(*T)["WHEEL"] = new WheelVariableChanger(OnWheel_EnterPress,-260, 175 - WindowHeapSize, 1, 1.5, STLS_WhiteSmall, "Brightness", "Delta");
 	(*T)["FIELD"] = Field_Adapter_ptr;
 	(*T)["TEXTBOX"] = TB_ptr;
+	(*T)["PAUSE"] = new Button("Pause", STLS_WhiteSmall, Pause, -260, 125 - WindowHeapSize, 70, 10, 1, 0, 0xFFFFFFFF, 0xFF, 0xFFFFFFFF, 0x7F7F7FFF,nullptr);
+	(*T)["LIST"] = L = new SelectablePropertedList(BS_List_Black_Small, OnSelectPropList, nullptr, -260, -100 - WindowHeapSize, 70, 10, 15, 6, _Align::center);
+	L->PushStrings({ "Density","Temperature","Speed_x", "Speed_y","Force_x","Force_y" });
 
 	(*WH)["FWD"] = T;
 	WH->MainWindow_ID = "FWD";
@@ -2508,7 +2535,6 @@ void Init() {
 /////////////END OF USE////////////////
 ///////////////////////////////////////
 
-#include "grav_eq_iterator.h"
 
 
 void onTimer(int v);
@@ -2517,14 +2543,16 @@ void mDisplay() {
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
 
-		dsfield dsf(gc_iter::fsize);
-		//dsfield xspeed(gc_iter::fsize);
+		dsfield dsf(gc_iter::fsize,0);
 
-		randomise_dsfield(dsf, 5, 0.5, 4, 2);
+		//randomise_dsfield(dsf, 5, 0.3, 2, 2);
+		for (int x = 0; x < dsf.size(); x++) {
+			for (int y = 0; y < dsf.size(); y++) {
+				dsf.at(x, y) = (((double)x - dsf.size() / 2)*((double)x - dsf.size() / 2) + ((double)y - dsf.size() / 2)*((double)y - dsf.size() / 2) > dsf.size()*dsf.size() / 100) ? 0.1 : 0.3;
+			}
+		}
 
-		//randomise_dsfield(xspeed, 5, 0, 4, 2);
 		gc_iter::grei_base.density.swap(dsf);
-		//gc_iter::grei_base.density.swap(xspeed);
 		
 		gc_iter::create_iter_threads();
 
@@ -2532,13 +2560,11 @@ void mDisplay() {
 		Init();
 		
 		ANIMATION_IS_ACTIVE = !ANIMATION_IS_ACTIVE;
+
+		Field_Adapter_ptr->dsf = &gc_iter::grei_base.density;
 		onTimer(0);
 	}
-	Field_Adapter_ptr->dsf = &gc_iter::grei_base.density;
 	TB_ptr->SafeStringReplace(to_string(Field_Adapter_ptr->dsf->at(Field_Adapter_ptr->hovered_x, Field_Adapter_ptr->hovered_y)));
-	//double cell_size = 2 * RANGE / (min(WindX, WindY));
-
-	//draw_dsfield(dsf, 0, 0, 200, cell_size);
 
 	WH->Draw();
 	glutSwapBuffers();

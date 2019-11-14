@@ -21,12 +21,12 @@ struct greqit {
 		y_force,
 		temperature;
 	greqit(size_t n, double initial_temp = 1.) {
-		density = dsfield(n);
-		x_speed = dsfield(n);
-		y_speed = dsfield(n);
-		x_force = dsfield(n);
-		y_force = dsfield(n);
-		temperature = dsfield(n);
+		density = dsfield(n, 0, false);
+		x_speed = dsfield(n, 0, false);
+		y_speed = dsfield(n, 0, false);
+		x_force = dsfield(n, 0);
+		y_force = dsfield(n, 0);
+		temperature = dsfield(n, initial_temp);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
 				x = initial_temp;
@@ -35,11 +35,11 @@ struct greqit {
 	}
 	greqit(const dsfield &dsf_p, double initial_temp = 1.) {
 		density = dsf_p;
-		x_speed = dsfield(dsf_p.size());
-		y_speed = dsfield(dsf_p.size());
-		x_force = dsfield(dsf_p.size());
-		y_force = dsfield(dsf_p.size());
-		temperature = dsfield(dsf_p.size());
+		x_speed = dsfield(dsf_p.size(), 0, false);
+		y_speed = dsfield(dsf_p.size(), 0, false);
+		x_force = dsfield(dsf_p.size(), 0);
+		y_force = dsfield(dsf_p.size(), 0);
+		temperature = dsfield(dsf_p.size(), initial_temp);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
 				x = initial_temp;
@@ -50,9 +50,9 @@ struct greqit {
 		density = dsf_p;
 		x_speed = dsf_vx;
 		y_speed = dsf_vy;
-		x_force = dsfield(dsf_p.size());
-		y_force = dsfield(dsf_p.size());
-		temperature = dsfield(dsf_p.size());
+		x_force = dsfield(dsf_p.size(), 0);
+		y_force = dsfield(dsf_p.size(), 0);
+		temperature = dsfield(dsf_p.size(), initial_temp);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
 				x = initial_temp;
@@ -64,6 +64,7 @@ struct greqit {
 		x_speed.swap(grei.x_speed);
 		y_speed.swap(grei.y_speed);
 		x_force.swap(grei.x_force);
+		y_force.swap(grei.y_force);
 		temperature.swap(grei.temperature);
 	}
 	inline size_t size() {
@@ -72,7 +73,7 @@ struct greqit {
 };
 
 namespace d_h2 {
-	inline double _finite_difference_1st_order(const double& left1, const double& right1) {
+	inline double _finite_difference_1st_order(double left1, double right1) {
 		return (right1 - left1)*0.5;
 	}
 	inline double _finite_difference_1st_order_x(dsfield &dsf, int64_t x, int64_t y) {
@@ -87,7 +88,7 @@ namespace d_h2 {
 			dsf.at(x, y + 1)
 		);
 	}
-	inline double _finite_difference_2nd_order(const double& left1, const double& center, const double& right1) {
+	inline double _finite_difference_2nd_order(double left1, double center, double right1) {
 		return (left1 - 2.*center + right1);
 	}
 	inline double _finite_difference_2nd_order_xx(dsfield &dsf, int64_t x, int64_t y) {
@@ -124,7 +125,7 @@ namespace d_h2 {
 }
 
 namespace d_h4 {
-	inline double _finite_difference_1st_order(const double& left2, const double& left1, const double& right1, const double& right2) {
+	inline double _finite_difference_1st_order(double left2, double left1, double right1, const double& right2) {
 		return (.25*left2 - 2 * left1 + 2 * right1 - .25*right2) / 3.;
 	}
 	inline double _finite_difference_1st_order_x(dsfield &dsf, int64_t x, int64_t y) {
@@ -143,7 +144,7 @@ namespace d_h4 {
 			dsf.at(x, y + 2)
 		);
 	}
-	inline double _finite_difference_2nd_order(const double& left2, const double& left1, const double& center, const double& right1, const double& right2) {
+	inline double _finite_difference_2nd_order(double left2, double left1, double center, double right1, double right2) {
 		return (-.25*left2 + 4. * left1 - 7.5*center + 4. * right1 - .25*right2) / 3.;
 	}
 	inline double _finite_difference_2nd_order_xx(dsfield &dsf, int64_t x, int64_t y) {
@@ -188,24 +189,30 @@ namespace d_op {
 	inline double divergence_h2(dsfield &dsf, int64_t x, int64_t y) {
 		return d_h2::DF_1_order(dsf, x, y, d::dx) + d_h2::DF_1_order(dsf, x, y, d::dy);
 	}
+	inline double divergence_h4(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
+		return d_h4::DF_1_order(x_dsf, x, y, d::dx) + d_h4::DF_1_order(y_dsf, x, y, d::dy);
+	}
+	inline double divergence_h2(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
+		return d_h2::DF_1_order(x_dsf, x, y, d::dx) + d_h2::DF_1_order(y_dsf, x, y, d::dy);
+	}
 	inline void cross_product(double a1, double a2, double a3, double b1, double b2, double b3, double &out1, double &out2, double &out3) {
 		out1 = a2 * b3 - a3 * b2;
 		out2 = a1 * b3 - a3 * b1;
 		out3 = a1 * b2 - a2 * b1;
 	}
+	inline double DF_h4_curl_2d_operator(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
+		return d_h2::DF_1_order(y_dsf, x, y, d::dy) - d_h4::DF_1_order(x_dsf, x, y, d::dx);
+	}
+	inline double DF_h2_curl_2d_operator(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
+		return d_h2::DF_1_order(y_dsf, x, y, d::dy) - d_h2::DF_1_order(x_dsf, x, y, d::dx);
+	}
 	inline void DF_h4_lamb_operator_at(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
-		double curl_z = d_h4::DF_1_order(y_dsf, x, y, d::dx) - d_h4::DF_1_order(y_dsf, x, y, d::dy);
+		double curl_z = DF_h4_curl_2d_operator(x_dsf, y_dsf, x, y);
 		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
 	}
 	inline void DF_h2_lamb_operator_at(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
-		double curl_z = d_h2::DF_1_order(y_dsf, x, y, d::dx) - d_h2::DF_1_order(y_dsf, x, y, d::dy);
+		double curl_z = DF_h2_curl_2d_operator(x_dsf, y_dsf, x, y);
 		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
-	}
-	inline double DF_h4_curl_2d_operator(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
-		return d_h2::DF_1_order(y_dsf, x, y, d::dx) - d_h4::DF_1_order(y_dsf, x, y, d::dy);
-	}
-	inline double DF_h2_curl_2d_operator(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
-		return d_h2::DF_1_order(y_dsf, x, y, d::dx) - d_h2::DF_1_order(x_dsf, x, y, d::dy);
 	}
 	inline double inv_rad(int64_t x, int64_t y) {
 		if (!x && !y)
@@ -216,12 +223,13 @@ namespace d_op {
 }
 
 namespace gc_iter {
-	int64_t fsize = 200;
-	double iter_speed=0.05;
-	double pressure_transform_coef = 5;
-	double grav_const = 0.001;
+	int64_t fsize = 100;
+	double iter_speed=0.01;
+	double pressure_transform_coef = 1.37;
+	double gas_viscosity = 0.01;
+	double grav_const = 0.1;
 	////inter-thread-ey variables////
-	volatile bool iter_pause = false, iter_break = false;
+	volatile bool iter_pause = true, iter_break = false;
 	volatile int threads_count = max(thread::hardware_concurrency() - 1, 3u);
 	greqit grei_base(fsize);
 	greqit grei_buffer(fsize);
@@ -230,24 +238,42 @@ namespace gc_iter {
 	
 
 	void iter_grei_at(int64_t x, int64_t y) {
-		double lambx = 0, lamby = 0;
-		grei_buffer.density.at(x, y) = grei_base.density.at(x,y) + iter_speed*(
-			grei_base.density.at(x, y)*(d_h2::DF_1_order(grei_base.x_speed, x, y, d::dx) + d_h2::DF_1_order(grei_base.y_speed, x, y, d::dy)) +
+		grei_buffer.density.at(x, y) = grei_base.density.at(x, y) + iter_speed * (
+			grei_base.density.at(x, y)*(d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y)) +
 			grei_base.x_speed.at(x, y)*d_h2::DF_1_order(grei_base.density, x, y, d::dx) +
 			grei_base.y_speed.at(x, y)*d_h2::DF_1_order(grei_base.density, x, y, d::dy)
-			////
+			////ok
 		);
+
 		grei_buffer.temperature.at(x, y) = grei_base.temperature.at(x, y) + iter_speed * (
-			d_op::DF_h2_curl_2d_operator(grei_base.x_speed, grei_base.y_speed, x, y)*(grei_base.temperature.at(x, y)*log(pressure_transform_coef*grei_base.temperature.at(x, y)))
+			d_op::divergence_h2(grei_buffer.x_speed, grei_buffer.y_speed, x, y)/grei_base.density.at(x,y)
 		);
-		d_op::DF_h2_lamb_operator_at(grei_base.x_speed, grei_base.y_speed, x, y, lambx, lamby);
 		grei_buffer.x_speed.at(x, y) = grei_base.x_speed.at(x, y) + iter_speed * (
-			lambx + pressure_transform_coef * (d_h2::DF_1_order(grei_base.temperature, x, y, d::dx) + d_h2::DF_1_order(grei_base.density, x, y, d::dx) * grei_base.temperature.at(x, y) / grei_base.density.at(x, y)) + grei_base.x_force.at(x, y)
+			(
+				grei_buffer.x_speed.at(x, y)*d_h2::DF_1_order(grei_buffer.x_speed, x, y, d::dx) +
+				grei_buffer.y_speed.at(x, y)*d_h2::DF_1_order(grei_buffer.x_speed, x, y, d::dy)
+			) +
+			pressure_transform_coef * (
+				d_h2::DF_1_order(grei_base.density, x, y, d::dx) * grei_base.temperature.at(x, y) +
+				d_h2::DF_1_order(grei_base.temperature, x, y, d::dx) * grei_base.density.at(x, y)
+			) +
+			grei_base.x_force.at(x, y)
 		);
 		grei_buffer.y_speed.at(x, y) = grei_base.y_speed.at(x, y) + iter_speed * (
-			lamby + pressure_transform_coef * (d_h2::DF_1_order(grei_base.temperature, x, y, d::dy) + d_h2::DF_1_order(grei_base.density, x, y, d::dy) * grei_base.temperature.at(x, y) / grei_base.density.at(x, y)) + grei_base.y_force.at(x, y)
+			(
+				grei_buffer.x_speed.at(x, y)*d_h2::DF_1_order(grei_buffer.y_speed, x, y, d::dx) +
+				grei_buffer.y_speed.at(x, y)*d_h2::DF_1_order(grei_buffer.y_speed, x, y, d::dy)
+			) +
+			pressure_transform_coef * (	
+				d_h2::DF_1_order(grei_base.density, x, y, d::dy) * grei_base.temperature.at(x, y) +
+				d_h2::DF_1_order(grei_base.temperature, x, y, d::dy) * grei_base.density.at(x, y)
+			) + 
+			grei_base.y_force.at(x, y)
 		);
 		////recalculate integral of force here...
+		//grei_buffer.x_force.at(x, y) = 1;
+		//grei_buffer.y_force.at(x, y) = -grav_const * (y - fsize / 2.);
+		//grei_buffer.x_force.at(x, y) = -grav_const * (x - fsize / 2.);
 	}
 	void do_fast_fourier_x(int64_t x) {
 

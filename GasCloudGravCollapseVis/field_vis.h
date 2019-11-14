@@ -23,25 +23,46 @@ using fv_utils::rdrand;
 
 typedef struct drawable_square_field {
 	field fd;
-	double garbage_var,outside_val;
+	double garbage_var, outside_val;
+	bool ivdev;
 	int64_t field_size;
 	double cell_size;
-	drawable_square_field(size_t n = 100,double outside_val = 0.) : field_size(n), outside_val(outside_val) {
+	drawable_square_field(size_t n = 100, double outside_val = 0., bool is_value_defined_edge_value = true) : field_size(n), outside_val(outside_val) {
 		line ld(n, 0);
 		fd.assign(n, ld);
+		ivdev = is_value_defined_edge_value;
 	}
 	double at(int64_t x, int64_t y) const {
 		if (x >= 0 && x < field_size && y >= 0 && y < field_size)
 			return fd[y][x];
-		else return outside_val;
+		else{
+			if (ivdev) 
+				return outside_val;
+			else {
+				if (x < 0)x = 0;
+				else x = field_size - 1;
+				if (y < 0)y = 0;
+				else y = field_size - 1;
+				return fd[y][x];
+			}
+		}
 	}
 	double& at(int64_t x, int64_t y) {
-		if (x >= 0 && x < field_size && y >= 0 && y < field_size) {
+		if (x >= 0 && x < field_size && y >= 0 && y < field_size)
 			return fd[y][x];
-		}
 		else {
-			garbage_var = outside_val;
-			return garbage_var;
+			if (ivdev) {
+				garbage_var = outside_val;
+				return garbage_var;
+			}
+			else {
+				if (x < 0)x = 0;
+				else x = field_size - 1;
+				if (y < 0)y = 0;
+				else y = field_size - 1;
+				garbage_var = fd[y][x];
+				return garbage_var;
+			}
 		}
 	}
 	line& operator[](int64_t N) {
