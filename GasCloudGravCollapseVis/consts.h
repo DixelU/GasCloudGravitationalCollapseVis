@@ -1,3 +1,4 @@
+#pragma once
 #define SMP_BOOL_SETTINGS_EMPTY_TRACKS_RMV 0b1u
 #define SMP_BOOL_SETTINGS_REMNANTS_RMV 0b10u
 #define SMP_BOOL_SETTINGS_ALL_INSTRUMENTS_TO_PIANO 0b100u
@@ -50,3 +51,4 @@ enum _Align{
 	top=GLOBAL_TOP,
 	bottom=GLOBAL_BOTTOM
 };
+const double pi = atan(1) * 4;

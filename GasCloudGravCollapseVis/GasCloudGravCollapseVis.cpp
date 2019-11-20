@@ -17,7 +17,6 @@
 #include <map>
 #include <deque>
 #include <thread>
-//#include <>
 
 //#define WIN32_LEAN_AND_MEAN
 
@@ -2514,6 +2513,9 @@ void OnSelectPropList(int ID) {
 		Field_Adapter_ptr->dsf = &gc_iter::grei_base.y_force; break;
 	}
 }
+void Break() {
+	gc_iter::iter_break = true;
+}
 
 ButtonSettings *BS_List_Black_Small = new ButtonSettings(STLS_WhiteSmall, 0, 0, 100, 10, 1, 0, 0, 0xFFEFDFFF, 0x00003F7F, 0x7F7F7FFF);
 
@@ -2523,7 +2525,7 @@ void Init() {
 	(*T)["WHEEL"] = new WheelVariableChanger(OnWheel_EnterPress,-260, 175 - WindowHeapSize, 1, 1.5, STLS_WhiteSmall, "Brightness", "Delta");
 	(*T)["FIELD"] = Field_Adapter_ptr;
 	(*T)["TEXTBOX"] = TB_ptr;
-	(*T)["PAUSE"] = new Button("Pause", STLS_WhiteSmall, Pause, -260, 125 - WindowHeapSize, 70, 10, 1, 0, 0xFFFFFFFF, 0xFF, 0xFFFFFFFF, 0x7F7F7FFF,nullptr);
+	(*T)["PAUSE"] = new Button("Pause/Unpause", STLS_WhiteSmall, Pause, -260, 125 - WindowHeapSize, 70, 10, 1, 0, 0xFFFFFFFF, 0xFF, 0xFFFFFFFF, 0x7F7F7FFF,nullptr);
 	(*T)["LIST"] = L = new SelectablePropertedList(BS_List_Black_Small, OnSelectPropList, nullptr, -260, -100 - WindowHeapSize, 70, 10, 15, 6, _Align::center);
 	L->PushStrings({ "Density","Temperature","Speed_x", "Speed_y","Force_x","Force_y" });
 
@@ -2543,14 +2545,20 @@ void mDisplay() {
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
 
-		dsfield dsf(gc_iter::fsize,0);
+		dsfield dsf(gc_iter::fsize,1);
 
-		//randomise_dsfield(dsf, 5, 0.3, 2, 2);
+		randomise_dsfield(dsf, 2, 0, 2, 1);
+		
 		for (int x = 0; x < dsf.size(); x++) {
 			for (int y = 0; y < dsf.size(); y++) {
-				dsf.at(x, y) = (((double)x - dsf.size() / 2)*((double)x - dsf.size() / 2) + ((double)y - dsf.size() / 2)*((double)y - dsf.size() / 2) > dsf.size()*dsf.size() / 100) ? 0.1 : 0.3;
+				dsf.at(x, y) *= 0.1;
 			}
 		}
+		
+		/*gc_iter::create_rad3_image();
+		for (int i = 0; i < gc_iter::rad3_fc[dsf.size()].size();i++) {
+			printf("%.9lfcos(%lfx) + ", gc_iter::rad3_fc[dsf.size()][i].real()*100, i*0.02454369*100);
+		}*/
 
 		gc_iter::grei_base.density.swap(dsf);
 		

@@ -2,6 +2,7 @@
 #include <vector>
 #include <utility>
 #include <random>
+#include <complex>
 #include "multidimentional_point.h"
 
 namespace fv_utils {
@@ -13,30 +14,108 @@ namespace fv_utils {
 	}
 }
 
-typedef std::vector<double> line;
-typedef std::vector<Point<2>> pline;
+using line = std::vector<double>;
+using pline = std::vector<Point<2>>;
+using cline = std::vector<std::complex<double>>;
 
-typedef std::vector<line> field;
-typedef std::vector<pline> pfield;
+using field = std::vector<line>;
+using pfield = std::vector<pline>;
+using cfield = std::vector<cline>;
 
 using fv_utils::rdrand;
 
-typedef struct drawable_square_field {
-	field fd;
-	double garbage_var, outside_val;
+auto constant_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
+	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
+		return f[y][x];
+	else 
+		return val;
+};
+auto c_constant_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
+	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
+		return f[y][x];
+	else 
+		return val;
+};
+
+auto reflect_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
+	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
+		return f[y][x];
+	else {
+		if (x < 0) x = 0;
+		else x = f.size() - 1;
+		if (y < 0) y = 0;
+		else y = f.size() - 1;
+		val = -f[y][x];
+		return val;
+	}
+};
+auto c_reflect_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
+	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
+		return f[y][x];
+	else {
+		if (x < 0)x = 0;
+		else x = f.size() - 1;
+		if (y < 0)y = 0;
+		else y = f.size() - 1;
+		return -f[y][x];
+	}
+};
+
+auto continue_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
+	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
+		return f[y][x];
+	else {
+		if (x < 0) x = 0;
+		else x = f.size() - 1;
+		if (y < 0) y = 0;
+		else y = f.size() - 1;
+		val = f[y][x];
+		return val;
+	}
+};
+auto c_continue_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
+	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
+		return f[y][x];
+	else {
+		if (x < 0)x = 0;
+		else x = f.size() - 1;
+		if (y < 0)y = 0;
+		else y = f.size() - 1;
+		return f[y][x];
+	}
+};
+
+auto pass_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
+	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
+		return f[y][x];
+	else {
+
+	}
+};
+auto c_pass_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
+	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
+		return f[y][x];
+	else {
+
+	}
+};
+
+
+typedef struct complex_square_field {
+	cfield fd;
+	std::complex<double> garbage_var, outside_val;
 	bool ivdev;
-	int64_t field_size;
-	double cell_size;
-	drawable_square_field(size_t n = 100, double outside_val = 0., bool is_value_defined_edge_value = true) : field_size(n), outside_val(outside_val) {
-		line ld(n, 0);
-		fd.assign(n, ld);
+	int64_t field_size; 
+	complex_square_field(size_t n = 100, std::complex<double> outside_val = 0., bool is_value_defined_edge_value = true) : field_size(n), outside_val(outside_val) {
+		cline cld(n, 0);
+		fd.assign(n, cld);
 		ivdev = is_value_defined_edge_value;
 	}
-	double at(int64_t x, int64_t y) const {
+	const std::complex<double>& at(int64_t x, int64_t y) const {
 		if (x >= 0 && x < field_size && y >= 0 && y < field_size)
 			return fd[y][x];
-		else{
-			if (ivdev) 
+		else {
+			if (ivdev)
 				return outside_val;
 			else {
 				if (x < 0)x = 0;
@@ -47,7 +126,7 @@ typedef struct drawable_square_field {
 			}
 		}
 	}
-	double& at(int64_t x, int64_t y) {
+	std::complex<double>& at(int64_t x, int64_t y) {
 		if (x >= 0 && x < field_size && y >= 0 && y < field_size)
 			return fd[y][x];
 		else {
@@ -65,10 +144,46 @@ typedef struct drawable_square_field {
 			}
 		}
 	}
+	cline& operator[](int64_t N) {
+		return fd[N];
+	}
+	const cline& operator[](int64_t N) const {
+		return fd[N];
+	}
+	void swap(complex_square_field& dsf) {
+		fd.swap(dsf.fd);
+	}
+	size_t size() const {
+		return fd.size();
+	}
+} csfield;
+
+typedef struct drawable_square_field {
+	field fd;
+	double garbage_var, outside_val;
+	double&(*edge_handler)(field&, int64_t, int64_t, double&);
+	const double&(*const_edge_handler)(const field&, int64_t, int64_t, const double&);
+	int64_t field_size;
+	double cell_size;
+	drawable_square_field(size_t n = 100, double outside_val = 0.,
+		double&(*edge_handler)(field&, int64_t, int64_t, double&) = constant_edge,
+		const double&(*const_edge_handler)(const field&, int64_t, int64_t, const double&) = c_constant_edge
+	) : field_size(n), outside_val(outside_val), edge_handler(edge_handler), const_edge_handler(const_edge_handler){
+		line ld(n, 0);
+		fd.assign(n, ld);
+		garbage_var = 0;
+	}
+	const double& at(int64_t x, int64_t y) const {
+		return const_edge_handler(fd, x, y, outside_val);
+	}
+	double& at(int64_t x, int64_t y) {
+		garbage_var = outside_val;
+		return edge_handler(fd, x, y, garbage_var);
+	}
 	line& operator[](int64_t N) {
 		return fd[N];
 	}
-	line operator[](int64_t N) const {
+	const line& operator[](int64_t N) const {
 		return fd[N];
 	}
 	void swap(drawable_square_field& dsf) {

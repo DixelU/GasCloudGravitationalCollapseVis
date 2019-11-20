@@ -1,15 +1,13 @@
 #pragma once
 #include <thread>
+#include <complex>
 #include "field_vis.h"
 #include "weird_hacks.h"
-#include "fftw3.h"
-
-#pragma comment (lib, "libfftw3-3.lib")
+#include "consts.h"
 
 using namespace std;
 
-
-enum class d{
+enum class d {
 	dx, dy, dxy
 };
 
@@ -21,12 +19,12 @@ struct greqit {
 		y_force,
 		temperature;
 	greqit(size_t n, double initial_temp = 1.) {
-		density = dsfield(n, 0, false);
-		x_speed = dsfield(n, 0, false);
-		y_speed = dsfield(n, 0, false);
-		x_force = dsfield(n, 0);
-		y_force = dsfield(n, 0);
-		temperature = dsfield(n, initial_temp);
+		density = dsfield(n, 0, constant_edge, c_constant_edge);
+		x_speed = dsfield(n, 0, reflect_edge, c_reflect_edge);
+		y_speed = dsfield(n, 0, reflect_edge, c_reflect_edge);
+		x_force = dsfield(n, 0, reflect_edge, c_reflect_edge);
+		y_force = dsfield(n, 0, reflect_edge, c_reflect_edge);
+		temperature = dsfield(n, initial_temp, constant_edge, c_constant_edge);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
 				x = initial_temp;
@@ -35,11 +33,11 @@ struct greqit {
 	}
 	greqit(const dsfield &dsf_p, double initial_temp = 1.) {
 		density = dsf_p;
-		x_speed = dsfield(dsf_p.size(), 0, false);
-		y_speed = dsfield(dsf_p.size(), 0, false);
-		x_force = dsfield(dsf_p.size(), 0);
-		y_force = dsfield(dsf_p.size(), 0);
-		temperature = dsfield(dsf_p.size(), initial_temp);
+		x_speed = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
+		y_speed = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
+		x_force = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
+		y_force = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
+		temperature = dsfield(dsf_p.size(), initial_temp, constant_edge, c_constant_edge);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
 				x = initial_temp;
@@ -50,9 +48,9 @@ struct greqit {
 		density = dsf_p;
 		x_speed = dsf_vx;
 		y_speed = dsf_vy;
-		x_force = dsfield(dsf_p.size(), 0);
-		y_force = dsfield(dsf_p.size(), 0);
-		temperature = dsfield(dsf_p.size(), initial_temp);
+		x_force = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
+		y_force = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
+		temperature = dsfield(dsf_p.size(), initial_temp, constant_edge, c_constant_edge);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
 				x = initial_temp;
@@ -78,7 +76,7 @@ namespace d_h2 {
 	}
 	inline double _finite_difference_1st_order_x(dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_1st_order(
-			dsf.at(x - 1, y), 
+			dsf.at(x - 1, y),
 			dsf.at(x + 1, y)
 		);
 	}
@@ -128,7 +126,7 @@ namespace d_h4 {
 	inline double _finite_difference_1st_order(double left2, double left1, double right1, const double& right2) {
 		return (.25*left2 - 2 * left1 + 2 * right1 - .25*right2) / 3.;
 	}
-	inline double _finite_difference_1st_order_x(dsfield &dsf, int64_t x, int64_t y) {
+	inline double _finite_difference_1st_order_x(const dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_1st_order(
 			dsf.at(x - 2, y),
 			dsf.at(x - 1, y),
@@ -154,7 +152,7 @@ namespace d_h4 {
 			dsf.at(x, y),
 			dsf.at(x + 1, y),
 			dsf.at(x + 2, y)
-			);
+		);
 	}
 	inline double _finite_difference_2nd_order_yy(dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_2nd_order(
@@ -214,103 +212,196 @@ namespace d_op {
 		double curl_z = DF_h2_curl_2d_operator(x_dsf, y_dsf, x, y);
 		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
 	}
-	inline double inv_rad(int64_t x, int64_t y) {
-		if (!x && !y)
-			return 2.;
-		else
-			return Q_rsqrt((double)(x*x+y*y));
-	}
 }
 
 namespace gc_iter {
-	int64_t fsize = 100;
-	double iter_speed=0.01;
-	double pressure_transform_coef = 1.37;
+	int64_t fsize = 128;
+	double iter_speed = 0.01;
+	double pressure_transform_coef = 0.4;
 	double gas_viscosity = 0.01;
 	double grav_const = 0.1;
 	////inter-thread-ey variables////
 	volatile bool iter_pause = true, iter_break = false;
 	volatile int threads_count = max(thread::hardware_concurrency() - 1, 3u);
-	greqit grei_base(fsize);
-	greqit grei_buffer(fsize);
-	dsfield fourier_coef, fourier_coef_buffer;
+	greqit grei_base(fsize, 20);
+	greqit grei_buffer(fsize, 20);
+	csfield den_fc(fsize), den_fc_buffer(fsize);
+	csfield rad3_fc(2*fsize);
 	volatile int* f_flags = nullptr;//if the thread completed cycle, it sets f_flags[thid] to one and waits until it will be set back to zero
-	
+	double rad3(int64_t x, int64_t y) {
+		if (!x && !y)
+			return 0.;
+		else
+			return 1. / pow(x * x + y * y, 1.5);
+	}
 
+	void do_rad3_image_slice(const int64_t &x, int64_t begin = 0, int64_t N = rad3_fc.size(), int64_t s = 1) {
+		complex<double> epsilon = exp(complex<double>(0, -2 * pi / N));
+		complex<double> t;
+		if (N == 2) {
+			rad3_fc.at(x, begin) = rad3(x, begin) + rad3(x, begin + s);
+			rad3_fc.at(x, begin + N / 2) = rad3(x, begin) - rad3(x, begin + s);
+		}
+		else {
+			do_rad3_image_slice(x, begin, N / 2, 2 * s);
+			do_rad3_image_slice(x, begin + s, N / 2, 2 * s);
+			for (int64_t k = begin, pwr = 0; k < rad3_fc.size() / 2; k += s, pwr++) {
+				t = den_fc.at(x, k);
+				den_fc.at(x, k) = (t + pow(epsilon, pwr) * den_fc.at(x, k + N / 2));
+				den_fc.at(x, k + N / 2) = t - pow(epsilon, pwr) * den_fc.at(x, k + N / 2);
+			}
+		}
+	}
+	void create_rad3_image() {
+		for (int64_t x = 0; x < rad3_fc.size(); x++) {
+			do_rad3_image_slice(x);
+		}
+	}
+
+	void do_fast_slice_fourier(const int64_t &x, int64_t begin = 0, int64_t N = den_fc_buffer.size(), int64_t s = 1) {
+		complex<double> epsilon = exp(complex<double>(0, -2 * pi / N));
+		complex<double> t;
+		if (N == 2) {
+			den_fc_buffer.at(x, begin) = grei_base.density.at(x, begin) + grei_base.density.at(x, begin + s);
+			den_fc_buffer.at(x, begin + N/2) = grei_base.density.at(x, begin) - grei_base.density.at(x, begin + s);
+		}
+		else {
+			do_fast_slice_fourier(x, begin, N / 2, 2 * s);
+			do_fast_slice_fourier(x, begin + s, N / 2, 2 * s);
+			for (int64_t k = begin, pwr = 0; k < den_fc_buffer.size() / 2; k += s, pwr++) {
+				t = den_fc.at(x,k);
+				den_fc.at(x, k) = (t + pow(epsilon, pwr) * den_fc.at(x, k + N / 2));
+				den_fc.at(x, k + N/2) = t - pow(epsilon, pwr) * den_fc.at(x, k + N / 2);
+			}
+		}
+	}
+
+	void project_the_line(const int64_t &x, int64_t begin = 0, int64_t N = den_fc_buffer.size(), int64_t s = 1) {
+		complex<double> epsilon = exp(complex<double>(0, -2 * pi / N));
+		complex<double> t;
+		if (N == 2) {
+			den_fc_buffer.at(x, begin) = grei_base.density.at(x, begin) + grei_base.density.at(x, begin + s);
+			den_fc_buffer.at(x, begin + N / 2) = grei_base.density.at(x, begin) - grei_base.density.at(x, begin + s);
+		}
+		else {
+			do_fast_slice_fourier(x, begin, N / 2, 2 * s);
+			do_fast_slice_fourier(x, begin + s, N / 2, 2 * s);
+			for (int64_t k = begin, pwr = 0; k < den_fc_buffer.size() / 2; k += s, pwr++) {
+				t = den_fc.at(x, k);
+				den_fc.at(x, k) = (t + pow(epsilon, pwr) * den_fc.at(x, k + N / 2));
+				den_fc.at(x, k + N / 2) = t - pow(epsilon, pwr) * den_fc.at(x, k + N / 2);
+			}
+		}
+	}
+
+	double Fx(int64_t at_x, int64_t at_y) {
+		double sum = 0;
+		for (int64_t x = 0; x < grei_base.size(); x++) {
+			for (int64_t y = 0; y < grei_base.size(); y++) {
+				sum += rad3(x - at_x, y - at_y)* (x - at_x)*grei_base.density.at(x, y);
+			}
+		}
+		return sum;
+	}
+	double Fy(int64_t at_x, int64_t at_y) {
+		double sum = 0;
+		for (int64_t x = 0; x < grei_base.size(); x++) {
+			for (int64_t y = 0; y < grei_base.size(); y++) {
+				sum += rad3(x - at_x, y - at_y)* (y - at_y)*grei_base.density.at(x, y);
+			}
+		}
+		return sum;
+	}
 	void iter_grei_at(int64_t x, int64_t y) {
+		double t_T = 0;
+		if (isnan(grei_base.density.at(x, y)))
+			grei_base.density.at(x, y) = 0.01;
+		if (isnan(grei_base.x_speed.at(x, y)))
+			grei_base.x_speed.at(x, y) = 0;
+		if (isnan(grei_base.y_speed.at(x, y)))
+			grei_base.y_speed.at(x, y) = 0;
+		if (isnan(grei_base.temperature.at(x, y)))
+			grei_base.temperature.at(x, y) = 20;
+
+		//grei_buffer.x_force.at(x, y) = 1;
+		grei_buffer.y_force.at(x, y) = 1;
 		grei_buffer.density.at(x, y) = grei_base.density.at(x, y) + iter_speed * (
-			grei_base.density.at(x, y)*(d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y)) +
+			grei_base.density.at(x, y)*(
+				d_h2::DF_1_order(grei_base.x_speed,x,y,d::dx) + d_h2::DF_1_order(grei_base.y_speed, x, y, d::dy)
+			) +
 			grei_base.x_speed.at(x, y)*d_h2::DF_1_order(grei_base.density, x, y, d::dx) +
 			grei_base.y_speed.at(x, y)*d_h2::DF_1_order(grei_base.density, x, y, d::dy)
 			////ok
 		);
-
 		grei_buffer.temperature.at(x, y) = grei_base.temperature.at(x, y) + iter_speed * (
-			d_op::divergence_h2(grei_buffer.x_speed, grei_buffer.y_speed, x, y)/grei_base.density.at(x,y)
-		);
+			d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y) +
+			(d_h2::DF_2_order(grei_base.temperature, x, y, d::dx) + d_h2::DF_2_order(grei_base.temperature, x, y, d::dy))
+			//+ grei_buffer.density.at(x, y) - grei_base.density.at(x, y)
+			);
+		if (!x) {
+			grei_buffer.x_speed.at(0, y) = 0;
+			grei_buffer.y_speed.at(0, y) = iter_speed * grei_base.y_speed.at(1, y);
+			return;
+		}
+		if (!y) {
+			grei_buffer.x_speed.at(x, 0) = iter_speed * grei_base.x_speed.at(x, 1);
+			grei_buffer.y_speed.at(x, 0) = 0;
+			return;
+		}
+		if (x == fsize - 1) {
+			grei_buffer.x_speed.at(fsize - 1, y) = 0;
+			grei_buffer.y_speed.at(fsize - 1, y) = iter_speed * grei_base.y_speed.at(fsize - 2, y);
+			return;
+		}
+		if (y == fsize - 1) {
+			grei_buffer.x_speed.at(x, fsize - 1) = iter_speed * grei_base.x_speed.at(x, fsize - 2);
+			grei_buffer.y_speed.at(x, fsize - 1) = 0;
+			return;
+		}
 		grei_buffer.x_speed.at(x, y) = grei_base.x_speed.at(x, y) + iter_speed * (
 			(
-				grei_buffer.x_speed.at(x, y)*d_h2::DF_1_order(grei_buffer.x_speed, x, y, d::dx) +
-				grei_buffer.y_speed.at(x, y)*d_h2::DF_1_order(grei_buffer.x_speed, x, y, d::dy)
-			) +
+				grei_base.x_speed.at(x, y)*d_h2::DF_1_order(grei_base.x_speed, x, y, d::dx) +
+				grei_base.y_speed.at(x, y)*d_h2::DF_1_order(grei_base.x_speed, x, y, d::dy)
+				) +
 			pressure_transform_coef * (
 				d_h2::DF_1_order(grei_base.density, x, y, d::dx) * grei_base.temperature.at(x, y) +
 				d_h2::DF_1_order(grei_base.temperature, x, y, d::dx) * grei_base.density.at(x, y)
-			) +
+				) / grei_base.density.at(x, y) +
 			grei_base.x_force.at(x, y)
-		);
+			);
 		grei_buffer.y_speed.at(x, y) = grei_base.y_speed.at(x, y) + iter_speed * (
 			(
-				grei_buffer.x_speed.at(x, y)*d_h2::DF_1_order(grei_buffer.y_speed, x, y, d::dx) +
-				grei_buffer.y_speed.at(x, y)*d_h2::DF_1_order(grei_buffer.y_speed, x, y, d::dy)
-			) +
-			pressure_transform_coef * (	
+				grei_base.x_speed.at(x, y)*d_h2::DF_1_order(grei_base.y_speed, x, y, d::dx) +
+				grei_base.y_speed.at(x, y)*d_h2::DF_1_order(grei_base.y_speed, x, y, d::dy)
+				) +
+			pressure_transform_coef * (
 				d_h2::DF_1_order(grei_base.density, x, y, d::dy) * grei_base.temperature.at(x, y) +
 				d_h2::DF_1_order(grei_base.temperature, x, y, d::dy) * grei_base.density.at(x, y)
-			) + 
+				) / grei_base.density.at(x, y) +
 			grei_base.y_force.at(x, y)
-		);
-		////recalculate integral of force here...
-		//grei_buffer.x_force.at(x, y) = 1;
-		//grei_buffer.y_force.at(x, y) = -grav_const * (y - fsize / 2.);
-		//grei_buffer.x_force.at(x, y) = -grav_const * (x - fsize / 2.);
+			);
 	}
-	void do_fast_fourier_x(int64_t x) {
-
-	}
-	void do_fast_fourier_y(int64_t y) {
-
-	}
-	void do_fourier_by_thread_id(int64_t thid) {
-
-	}
-
 
 	void create_iter_threads() {
+		gc_iter::iter_pause = false;
+		gc_iter::iter_break = false;
 		f_flags = new int[threads_count];
 		for (int thid = 0; thid < threads_count; thid++) {
 			f_flags[thid] = 1;
 			thread th([&](const int thi) {
-				const int64_t start = (thid - (thid >> 2) - 1)* grei_base.size() / (threads_count - (threads_count >> 2) - 1);
-				const int64_t end = (thid - (thid >> 2)) * grei_base.size() / (threads_count - (threads_count >> 2) - 1);
-				const int64_t fourier_id = ((thi & 3)) ? 0 : ((thi >> 2) + 1);
+				const int64_t start = (thid)* grei_base.size() / (threads_count);
+				const int64_t end = (thid + 1)* grei_base.size() / (threads_count);
 				while (!iter_break) {
-					if (fourier_id) {//do a fourier transform for a part of pressure func
-
-					}
-					else {
-						for (int64_t x = start; x < end; x++) {
-							for (int64_t y = 0; y < grei_base.size(); y++) {
-								
-								iter_grei_at(x, y);
-							}
+					for (int64_t x = start; x < end; x++) {
+						for (int64_t y = 0; y < grei_base.size(); y++) {
+							iter_grei_at(x, y);
 						}
 					}
-					//Sleep(1000);
 					f_flags[thi] = 0;
 					while (!f_flags[thi] || iter_pause) {
-						Sleep(5);
+						Sleep(1);
 					}
+					//printf("pass%d\n",thi);
 				}
 			}, thid);
 			th.detach();
@@ -327,11 +418,12 @@ namespace gc_iter {
 					}
 				}
 				if (flag) {
-					fourier_coef.swap(fourier_coef_buffer);
+					//fourier_coef_den.swap(fourier_coef_den_buffer);
 					grei_base.swap(grei_buffer);
 					for (int thi = 0; thi < threads_count; thi++) {
 						f_flags[thi] = 1;
 					}
+					//printf("released\n");
 				}
 			}
 		});
