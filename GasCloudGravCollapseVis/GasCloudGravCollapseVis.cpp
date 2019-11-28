@@ -2551,7 +2551,7 @@ void mDisplay() {
 		
 		for (int x = 0; x < dsf.size(); x++) {
 			for (int y = 0; y < dsf.size(); y++) {
-				dsf.at(x, y) *= 0.1;
+				dsf.at(x, y) *= exp(-(pow(x - gc_iter::fsize / 2, 2) + pow(y - gc_iter::fsize / 2, 2))/25) + 0.05;
 			}
 		}
 		

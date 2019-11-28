@@ -20,10 +20,10 @@ struct greqit {
 		temperature;
 	greqit(size_t n, double initial_temp = 1.) {
 		density = dsfield(n, 0, constant_edge, c_constant_edge);
-		x_speed = dsfield(n, 0, reflect_edge, c_reflect_edge);
-		y_speed = dsfield(n, 0, reflect_edge, c_reflect_edge);
-		x_force = dsfield(n, 0, reflect_edge, c_reflect_edge);
-		y_force = dsfield(n, 0, reflect_edge, c_reflect_edge);
+		x_speed = dsfield(n, 0, continue_edge, c_continue_edge);
+		y_speed = dsfield(n, 0, continue_edge, c_continue_edge);
+		x_force = dsfield(n, 0, continue_edge, c_continue_edge);
+		y_force = dsfield(n, 0, continue_edge, c_continue_edge);
 		temperature = dsfield(n, initial_temp, constant_edge, c_constant_edge);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
@@ -33,10 +33,10 @@ struct greqit {
 	}
 	greqit(const dsfield &dsf_p, double initial_temp = 1.) {
 		density = dsf_p;
-		x_speed = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
-		y_speed = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
-		x_force = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
-		y_force = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
+		x_speed = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
+		y_speed = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
+		x_force = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
+		y_force = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
 		temperature = dsfield(dsf_p.size(), initial_temp, constant_edge, c_constant_edge);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
@@ -48,8 +48,8 @@ struct greqit {
 		density = dsf_p;
 		x_speed = dsf_vx;
 		y_speed = dsf_vy;
-		x_force = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
-		y_force = dsfield(dsf_p.size(), 0, reflect_edge, c_reflect_edge);
+		x_force = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
+		y_force = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
 		temperature = dsfield(dsf_p.size(), initial_temp, constant_edge, c_constant_edge);
 		for (auto &y : temperature.fd) {
 			for (auto &x : y) {
@@ -215,9 +215,9 @@ namespace d_op {
 }
 
 namespace gc_iter {
-	int64_t fsize = 128;
+	int64_t fsize = 1000;
 	double iter_speed = 0.01;
-	double pressure_transform_coef = 0.4;
+	double pressure_transform_coef = 50;
 	double gas_viscosity = 0.01;
 	double grav_const = 0.1;
 	////inter-thread-ey variables////
@@ -313,60 +313,23 @@ namespace gc_iter {
 		return sum;
 	}
 	void iter_grei_at(int64_t x, int64_t y) {
-		double t_T = 0;
-		if (isnan(grei_base.density.at(x, y)))
-			grei_base.density.at(x, y) = 0.01;
-		if (isnan(grei_base.x_speed.at(x, y)))
-			grei_base.x_speed.at(x, y) = 0;
-		if (isnan(grei_base.y_speed.at(x, y)))
-			grei_base.y_speed.at(x, y) = 0;
-		if (isnan(grei_base.temperature.at(x, y)))
-			grei_base.temperature.at(x, y) = 20;
-
-		//grei_buffer.x_force.at(x, y) = 1;
-		grei_buffer.y_force.at(x, y) = 1;
+		//grei_buffer.y_force.at(x, y) = sin(x);
 		grei_buffer.density.at(x, y) = grei_base.density.at(x, y) + iter_speed * (
 			grei_base.density.at(x, y)*(
 				d_h2::DF_1_order(grei_base.x_speed,x,y,d::dx) + d_h2::DF_1_order(grei_base.y_speed, x, y, d::dy)
 			) +
 			grei_base.x_speed.at(x, y)*d_h2::DF_1_order(grei_base.density, x, y, d::dx) +
 			grei_base.y_speed.at(x, y)*d_h2::DF_1_order(grei_base.density, x, y, d::dy)
-			////ok
 		);
-		grei_buffer.temperature.at(x, y) = grei_base.temperature.at(x, y) + iter_speed * (
-			d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y) +
-			(d_h2::DF_2_order(grei_base.temperature, x, y, d::dx) + d_h2::DF_2_order(grei_base.temperature, x, y, d::dy))
-			//+ grei_buffer.density.at(x, y) - grei_base.density.at(x, y)
-			);
-		if (!x) {
-			grei_buffer.x_speed.at(0, y) = 0;
-			grei_buffer.y_speed.at(0, y) = iter_speed * grei_base.y_speed.at(1, y);
-			return;
-		}
-		if (!y) {
-			grei_buffer.x_speed.at(x, 0) = iter_speed * grei_base.x_speed.at(x, 1);
-			grei_buffer.y_speed.at(x, 0) = 0;
-			return;
-		}
-		if (x == fsize - 1) {
-			grei_buffer.x_speed.at(fsize - 1, y) = 0;
-			grei_buffer.y_speed.at(fsize - 1, y) = iter_speed * grei_base.y_speed.at(fsize - 2, y);
-			return;
-		}
-		if (y == fsize - 1) {
-			grei_buffer.x_speed.at(x, fsize - 1) = iter_speed * grei_base.x_speed.at(x, fsize - 2);
-			grei_buffer.y_speed.at(x, fsize - 1) = 0;
-			return;
-		}
+
 		grei_buffer.x_speed.at(x, y) = grei_base.x_speed.at(x, y) + iter_speed * (
 			(
 				grei_base.x_speed.at(x, y)*d_h2::DF_1_order(grei_base.x_speed, x, y, d::dx) +
 				grei_base.y_speed.at(x, y)*d_h2::DF_1_order(grei_base.x_speed, x, y, d::dy)
 				) +
 			pressure_transform_coef * (
-				d_h2::DF_1_order(grei_base.density, x, y, d::dx) * grei_base.temperature.at(x, y) +
-				d_h2::DF_1_order(grei_base.temperature, x, y, d::dx) * grei_base.density.at(x, y)
-				) / grei_base.density.at(x, y) +
+				2 * d_h2::DF_1_order(grei_base.density,x,y,d::dx)
+				) +
 			grei_base.x_force.at(x, y)
 			);
 		grei_buffer.y_speed.at(x, y) = grei_base.y_speed.at(x, y) + iter_speed * (
@@ -375,9 +338,8 @@ namespace gc_iter {
 				grei_base.y_speed.at(x, y)*d_h2::DF_1_order(grei_base.y_speed, x, y, d::dy)
 				) +
 			pressure_transform_coef * (
-				d_h2::DF_1_order(grei_base.density, x, y, d::dy) * grei_base.temperature.at(x, y) +
-				d_h2::DF_1_order(grei_base.temperature, x, y, d::dy) * grei_base.density.at(x, y)
-				) / grei_base.density.at(x, y) +
+				2 * d_h2::DF_1_order(grei_base.density, x, y, d::dy)
+				) +
 			grei_base.y_force.at(x, y)
 			);
 	}
@@ -398,9 +360,8 @@ namespace gc_iter {
 						}
 					}
 					f_flags[thi] = 0;
-					while (!f_flags[thi] || iter_pause) {
+					while (!f_flags[thi] || iter_pause)
 						Sleep(1);
-					}
 					//printf("pass%d\n",thi);
 				}
 			}, thid);
@@ -410,7 +371,7 @@ namespace gc_iter {
 			bool flag;
 			while (!iter_break) {
 				flag = true;
-				Sleep(10);
+				Sleep(1);
 				for (int thi = 0; thi < threads_count; thi++) {
 					if (f_flags[thi]) {
 						flag = false;
