@@ -37,69 +37,14 @@ auto c_constant_edge = [](const field &f, int64_t x, int64_t y, const double &va
 		return val;
 };
 
-auto reflect_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
-	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
-		return f[y][x];
-	else {
-		if (x < 0) x = 0;
-		else x = f.size() - 1;
-		if (y < 0) y = 0;
-		else y = f.size() - 1;
-		val = -f[y][x];
-		return val;
-	}
-};
-auto c_reflect_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
-	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
-		return f[y][x];
-	else {
-		if (x < 0)x = 0;
-		else x = f.size() - 1;
-		if (y < 0)y = 0;
-		else y = f.size() - 1;
-		return -f[y][x];
-	}
-};
-
 auto continue_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
-	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
-		return f[y][x];
-	else {
-		if (x < 0) x = 0;
-		else x = f.size() - 1;
-		if (y < 0) y = 0;
-		else y = f.size() - 1;
-		val = f[y][x];
-		return val;
-	}
+	int64_t size = f.size();
+	return f[(y + size)% size][(x + size) % size];
 };
 auto c_continue_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
-	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
-		return f[y][x];
-	else {
-		if (x < 0)x = 0;
-		else x = f.size() - 1;
-		if (y < 0)y = 0;
-		else y = f.size() - 1;
-		return f[y][x];
-	}
+	int64_t size = f.size();
+	return f[(y + size) % size][(x + size) % size];
 };
-
-auto pass_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
-	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
-		return f[y][x];
-	else {
-
-	}
-};
-auto c_pass_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
-	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
-		return f[y][x];
-	else {
-
-	}
-};
-
 
 typedef struct complex_square_field {
 	cfield fd;
@@ -166,8 +111,8 @@ typedef struct drawable_square_field {
 	int64_t field_size;
 	double cell_size;
 	drawable_square_field(size_t n = 100, double outside_val = 0.,
-		double&(*edge_handler)(field&, int64_t, int64_t, double&) = constant_edge,
-		const double&(*const_edge_handler)(const field&, int64_t, int64_t, const double&) = c_constant_edge
+		double&(*edge_handler)(field&, int64_t, int64_t, double&) = continue_edge,
+		const double&(*const_edge_handler)(const field&, int64_t, int64_t, const double&) = c_continue_edge
 	) : field_size(n), outside_val(outside_val), edge_handler(edge_handler), const_edge_handler(const_edge_handler){
 		line ld(n, 0);
 		fd.assign(n, ld);
@@ -222,19 +167,28 @@ void randomise_dsfield(dsfield& dsf, int64_t rastr_rad, double offset = 0.5, dou
 	}
 }
 
+inline float extended_edge(float V) {
+	constexpr float r = 4.5, q = -1.3;
+	return 1 - (r + q * V) / (V * V + r);
+}
+inline float extended_center(float V) {
+	constexpr float r = 9.8, q = 0;
+	return 1 - (r + q * V) / (V * V + r);
+}
 
 inline void draw_dsfield(const dsfield& dsf, float center_xpos, float center_ypos, float range, float pixel_size, float decrement = 1.) {
 	float ym = range + center_ypos, xm = range + center_xpos, inverse, orig, cell_size = 2 * range / (dsf.size());
-	glPointSize(cell_size/pixel_size);
+	glPointSize(cell_size / pixel_size);
 	glBegin(GL_POINTS);
 	float y = -range + center_ypos + cell_size / 2.;
 	float x = 0;
-	for (auto &&it_y : dsf.fd) {
-		x = -range + center_xpos + cell_size/2.;
-		for (auto &&it_x : it_y) {
-			orig = it_x*decrement;
-			inverse = -orig;
-			glColor3f(orig,-orig*inverse,inverse);
+	for (auto&& it_y : dsf.fd) {
+		x = -range + center_xpos + cell_size / 2.;
+		for (auto&& it_x : it_y) {
+			float local_val = (it_x>0?1:-1)*(abs(it_x)) * decrement;
+			orig = pow(extended_edge(local_val), 2);
+			inverse = pow(extended_edge(-local_val), 2);
+			glColor3f(orig*1.2, extended_center(local_val), inverse*1.2);
 			glVertex2f(x, y);
 			x += cell_size;
 		}
