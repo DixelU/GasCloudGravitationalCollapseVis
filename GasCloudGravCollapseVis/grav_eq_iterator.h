@@ -217,9 +217,8 @@ namespace d_op {
 namespace gc_iter {
 	int64_t fsize = 32;
 	double iter_speed = 0.01;
-	double adiabat = 0.8;
-	double gas_viscosity = 0.01;
-	double grav_const = 25;
+	double adiabat = 1.67;
+	double grav_const = 1;
 	////inter-thread-ey variables////
 	volatile bool iter_pause = true, iter_break = false;
 	volatile int threads_count = max(thread::hardware_concurrency() - 1, 3u);
@@ -257,31 +256,42 @@ namespace gc_iter {
 	void iter_grei_at(int64_t x, int64_t y) {
 		double t_T = 0;
 
-		grei_buffer.x_force.at(x, y) =  grav_const*Fx(x, y);
-		grei_buffer.y_force.at(x, y) =  grav_const* Fy(x, y);
+		grei_buffer.x_force.at(x, y) = grav_const * Fx(x, y) / grei_base.density.at(x, y);
+		grei_buffer.y_force.at(x, y) = grav_const * Fy(x, y) / grei_base.density.at(x, y);
 
 		grei_buffer.density.at(x, y) = grei_base.density.at(x, y) + iter_speed * (
-			grei_base.density.at(x, y) * (
-				d_h2::DF_1_order(grei_base.x_speed,x,y,d::dx) + d_h2::DF_1_order(grei_base.y_speed, x, y, d::dy)
-			) +
+			grei_base.density.at(x, y) * (d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y)) +
 			grei_base.x_speed.at(x, y) * d_h2::DF_1_order(grei_base.density, x, y, d::dx) +
 			grei_base.y_speed.at(x, y) * d_h2::DF_1_order(grei_base.density, x, y, d::dy)
 		);
 		grei_buffer.energy.at(x, y) = grei_base.energy.at(x, y) + iter_speed * (
-			(adiabat - 1) * grei_base.energy.at(x, y) * d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y)
+			(adiabat - 1) * grei_base.energy.at(x, y) * d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y) + (
+				grei_base.x_speed.at(x, y) * d_h2::DF_1_order(grei_base.energy, x, y, d::dx) +
+				grei_base.y_speed.at(x, y) * d_h2::DF_1_order(grei_base.energy, x, y, d::dy) 
+			)
 		);
  		grei_buffer.x_speed.at(x, y) = grei_base.x_speed.at(x, y) + iter_speed * (
-			(1 - adiabat) * (
+			(adiabat - 1) * (
 				d_h2::DF_1_order(grei_base.density, x, y, d::dx) * grei_base.energy.at(x, y) +
 				d_h2::DF_1_order(grei_base.energy, x, y, d::dx) * grei_base.density.at(x, y)
 				) / grei_base.density.at(x, y) +
+				(
+					grei_buffer.x_speed.at(x, y) * d_h2::DF_1_order(grei_buffer.x_speed, x, y, d::dx) +
+					grei_buffer.y_speed.at(x, y) * d_h2::DF_1_order(grei_buffer.x_speed, x, y, d::dy)
+				) 
+			+
 			grei_base.x_force.at(x, y)
 			);
 		grei_buffer.y_speed.at(x, y) = grei_base.y_speed.at(x, y) + iter_speed * (
-			(1 - adiabat) * (
+			(adiabat - 1) * (
 				d_h2::DF_1_order(grei_base.density, x, y, d::dy) * grei_base.energy.at(x, y) +
 				d_h2::DF_1_order(grei_base.energy, x, y, d::dy) * grei_base.density.at(x, y)
 				) / grei_base.density.at(x, y) +
+				(
+					grei_buffer.x_speed.at(x, y) * d_h2::DF_1_order(grei_buffer.y_speed, x, y, d::dx) +
+					grei_buffer.y_speed.at(x, y) * d_h2::DF_1_order(grei_buffer.y_speed, x, y, d::dy)
+				)
+			+
 			grei_base.y_force.at(x, y)
 		);
 	}
@@ -316,10 +326,10 @@ namespace gc_iter {
 					}
 					finised_flags[thi] = true;
 					rec_mutexes[thi].unlock();
-					printf("unlocked\n");
+					//printf("unlocked\n");
 					global_pause_lock.lock();
 					global_pause_lock.unlock();
-					printf("released\n");
+					//printf("released\n");
 				}
 				}, thid);
 			th.detach();
@@ -340,12 +350,12 @@ namespace gc_iter {
 						}
 					}
 				}
-				printf("G: unlocked\n");
+				//printf("G: unlocked\n");
 				grei_base.swap(grei_buffer);
 				global_pause_lock.unlock();
-				printf("G: released\n");
+				//printf("G: released\n");
 				local_lock.lock();
-				Sleep(33);
+				Sleep(13);
 				local_lock.unlock();
 			}
 			});
