@@ -2690,9 +2690,9 @@ void mDisplay() {
 		for (int x = 0; x < d_dsf.size(); x++) {
 			for (int y = 0; y < d_dsf.size(); y++) {//( (-pow(x - gc_iter::fsize * 0.5, 2) - pow(y - gc_iter::fsize * 0.5, 2))/(gc_iter::fsize/4))
 				d_dsf.at(x, y) =
-					exp((-pow(x - gc_iter::fsize * 0.65, 2) - pow(y - gc_iter::fsize * 0.65, 2)) / pow(gc_iter::fsize / 24, 2)) * 10. +
+					exp((-pow(x - gc_iter::fsize * 0.65, 2) - pow(y - gc_iter::fsize * 0.65, 2)) / pow(gc_iter::fsize / 24, 2)) * 1. +
 
-					exp((-pow(x - gc_iter::fsize * 0.35, 2) - pow(y - gc_iter::fsize * 0.35, 2)) / pow(gc_iter::fsize / 24, 2)) * 10.
+					exp((-pow(x - gc_iter::fsize * 0.35, 2) - pow(y - gc_iter::fsize * 0.35, 2)) / pow(gc_iter::fsize / 24, 2)) * 1.
 					+0.1;
 				e_dsf.at(x, y) = 1.;/// d_dsf.at(x, y);
 			}
