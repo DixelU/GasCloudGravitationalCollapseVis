@@ -2579,7 +2579,9 @@ struct FieldAdapter : HandleableUIPart {
 		this->hovered_x = this->hovered_y = 0;
 	}
 	void Draw() override {
-		draw_dsfield(*dsf, x, y, side_size * 0.5, pixel_size, brightness);
+		gc_iter::local_lock.lock();
+		draw_dsfield(*dsf, x, y, side_size * 0.5, 2 * RANGE / (min(WindX, WindY)), brightness);
+		gc_iter::local_lock.unlock();
 	}
 	void SafeMove(float dx, float dy) override {
 		x += dx;
@@ -2615,7 +2617,7 @@ struct FieldAdapter : HandleableUIPart {
 	}
 };
 
-FieldAdapter* Field_Adapter_ptr = new FieldAdapter(nullptr, 0, 0, 400, 2 * RANGE / (min(WindX, WindY)), 1.);
+FieldAdapter* Field_Adapter_ptr = new FieldAdapter(nullptr, 0, 0, 400, 2 * RANGE / (min(WindX, WindY)), 10.);
 TextBox* TB_ptr = new TextBox("", System_White, -260, 137.5 - WindowHeapSize, 10, 70, 10, 0, 0xFFFFFFFF, 1, _Align::center);
 
 void OnWheel_EnterPress(double var) {
@@ -2659,7 +2661,7 @@ ButtonSettings* BS_List_Black_Small = new ButtonSettings(System_White, 0, 0, 100
 void Init() {
 	SelectablePropertedList* L;
 	auto T = new MoveableWindow("Field window", System_White, -325, 200 + WindowHeapSize, 525, 400 + WindowHeapSize, 0xFF, 0x7F7F7F7F);
-	(*T)["WHEEL"] = new WheelVariableChanger(OnWheel_EnterPress, -260, 175 - WindowHeapSize, 1, 1.5, System_White, "Brightness", "Delta");
+	(*T)["WHEEL"] = new WheelVariableChanger(OnWheel_EnterPress, -260, 175 - WindowHeapSize, 10, 1.1, System_White, "Brightness", "Delta");
 	(*T)["FIELD"] = Field_Adapter_ptr;
 	(*T)["TEXTBOX"] = TB_ptr;
 	(*T)["PAUSE"] = new Button("Pause/Unpause", System_White, Pause, -260, 125 - WindowHeapSize, 70, 10, 1, 0, 0xFFFFFFFF, 0xFF, 0xFFFFFFFF, 0x7F7F7FFF, nullptr);
@@ -2682,18 +2684,18 @@ void mDisplay() {
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
 
+
+
 		dsfield d_dsf(gc_iter::fsize, 1);
 		dsfield e_dsf(gc_iter::fsize, 1);
-
-		//randomise_dsfield(d_dsf, 2, 0, 2, 1);
 
 		for (int x = 0; x < d_dsf.size(); x++) {
 			for (int y = 0; y < d_dsf.size(); y++) {//( (-pow(x - gc_iter::fsize * 0.5, 2) - pow(y - gc_iter::fsize * 0.5, 2))/(gc_iter::fsize/4))
 				d_dsf.at(x, y) =
-					exp((-pow(x - gc_iter::fsize * 0.65, 2) - pow(y - gc_iter::fsize * 0.65, 2)) / pow(gc_iter::fsize / 24, 2)) * 1. +
+					exp((-pow(x - gc_iter::fsize * 0.65, 2) - pow(y - gc_iter::fsize * 0.65, 2)) / pow(gc_iter::fsize / 24, 2)) * 5. +
 
-					exp((-pow(x - gc_iter::fsize * 0.35, 2) - pow(y - gc_iter::fsize * 0.35, 2)) / pow(gc_iter::fsize / 24, 2)) * 1.
-					+0.1;
+					exp((-pow(x - gc_iter::fsize * 0.35, 2) - pow(y - gc_iter::fsize * 0.35, 2)) / pow(gc_iter::fsize / 24, 2)) * 5.
+					+ 1;
 				e_dsf.at(x, y) = 1.;/// d_dsf.at(x, y);
 			}
 		}
@@ -2803,7 +2805,7 @@ int main(int argc, char** argv) {
 	glEnable(GL_BLEND);
 	//glEnable(GL_POLYGON_SMOOTH);//laggy af
 	glEnable(GL_LINE_SMOOTH);//GL_POLYGON_SMOOTH
-	glEnable(GL_POINT_SMOOTH);
+	//glEnable(GL_POINT_SMOOTH);
 
 	//glShadeModel(GL_SMOOTH);
 

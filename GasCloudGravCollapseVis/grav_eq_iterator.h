@@ -1,6 +1,7 @@
 #pragma once
 #include <thread>
 #include <complex>
+#include <functional>
 #include "field_vis.h"
 #include "weird_hacks.h"
 #include "consts.h"
@@ -74,13 +75,13 @@ namespace d_h2 {
 	inline double _finite_difference_1st_order(double left1, double right1) {
 		return (right1 - left1)*0.5;
 	}
-	inline double _finite_difference_1st_order_x(dsfield &dsf, int64_t x, int64_t y) {
+	inline double _finite_difference_1st_order_x(const dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_1st_order(
 			dsf.at(x - 1, y),
 			dsf.at(x + 1, y)
 		);
 	}
-	inline double _finite_difference_1st_order_y(dsfield &dsf, int64_t x, int64_t y) {
+	inline double _finite_difference_1st_order_y(const dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_1st_order(
 			dsf.at(x, y - 1),
 			dsf.at(x, y + 1)
@@ -89,21 +90,21 @@ namespace d_h2 {
 	inline double _finite_difference_2nd_order(double left1, double center, double right1) {
 		return (left1 - 2.*center + right1);
 	}
-	inline double _finite_difference_2nd_order_xx(dsfield &dsf, int64_t x, int64_t y) {
+	inline double _finite_difference_2nd_order_xx(const dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_2nd_order(
 			dsf.at(x - 1, y),
 			dsf.at(x, y),
 			dsf.at(x + 1, y)
 		);
 	}
-	inline double _finite_difference_2nd_order_yy(dsfield &dsf, int64_t x, int64_t y) {
+	inline double _finite_difference_2nd_order_yy(const dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_2nd_order(
 			dsf.at(x, y - 1),
 			dsf.at(x, y),
 			dsf.at(x, y + 1)
 		);
 	}
-	inline double DF_2_order(dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline double DF_2_order(const dsfield &dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
 			return _finite_difference_2nd_order_xx(dsf, x, y);
@@ -112,7 +113,7 @@ namespace d_h2 {
 		}
 		return 0;
 	}
-	inline double DF_1_order(dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline double DF_1_order(const dsfield &dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
 			return _finite_difference_1st_order_x(dsf, x, y);
@@ -134,7 +135,7 @@ namespace d_h4 {
 			dsf.at(x + 2, y)
 		);
 	}
-	inline double _finite_difference_1st_order_y(dsfield &dsf, int64_t x, int64_t y) {
+	inline double _finite_difference_1st_order_y(const dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_1st_order(
 			dsf.at(x, y - 2),
 			dsf.at(x, y - 1),
@@ -145,7 +146,7 @@ namespace d_h4 {
 	inline double _finite_difference_2nd_order(double left2, double left1, double center, double right1, double right2) {
 		return (-.25*left2 + 4. * left1 - 7.5*center + 4. * right1 - .25*right2) / 3.;
 	}
-	inline double _finite_difference_2nd_order_xx(dsfield &dsf, int64_t x, int64_t y) {
+	inline double _finite_difference_2nd_order_xx(const dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_2nd_order(
 			dsf.at(x - 2, y),
 			dsf.at(x - 1, y),
@@ -154,7 +155,7 @@ namespace d_h4 {
 			dsf.at(x + 2, y)
 		);
 	}
-	inline double _finite_difference_2nd_order_yy(dsfield &dsf, int64_t x, int64_t y) {
+	inline double _finite_difference_2nd_order_yy(const dsfield &dsf, int64_t x, int64_t y) {
 		return _finite_difference_2nd_order(
 			dsf.at(x, y - 2),
 			dsf.at(x, y - 1),
@@ -163,7 +164,7 @@ namespace d_h4 {
 			dsf.at(x, y + 2)
 		);
 	}
-	inline double DF_2_order(dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline double DF_2_order(const dsfield &dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
 			return _finite_difference_2nd_order_xx(dsf, x, y);
@@ -172,7 +173,7 @@ namespace d_h4 {
 		}
 		return 0;
 	}
-	inline double DF_1_order(dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline double DF_1_order(const dsfield &dsf, int64_t x, int64_t y, d diff) {
 		if (diff == d::dx)
 			return _finite_difference_1st_order_x(dsf, x, y);
 		else
@@ -181,16 +182,16 @@ namespace d_h4 {
 }
 
 namespace d_op {
-	inline double divergence_h4(dsfield &dsf, int64_t x, int64_t y) {
+	inline double divergence_h4(const dsfield &dsf, int64_t x, int64_t y) {
 		return d_h4::DF_1_order(dsf, x, y, d::dx) + d_h4::DF_1_order(dsf, x, y, d::dy);
 	}
-	inline double divergence_h2(dsfield &dsf, int64_t x, int64_t y) {
+	inline double divergence_h2(const dsfield &dsf, int64_t x, int64_t y) {
 		return d_h2::DF_1_order(dsf, x, y, d::dx) + d_h2::DF_1_order(dsf, x, y, d::dy);
 	}
-	inline double divergence_h4(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
+	inline double divergence_h4(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
 		return d_h4::DF_1_order(x_dsf, x, y, d::dx) + d_h4::DF_1_order(y_dsf, x, y, d::dy);
 	}
-	inline double divergence_h2(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
+	inline double divergence_h2(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
 		return d_h2::DF_1_order(x_dsf, x, y, d::dx) + d_h2::DF_1_order(y_dsf, x, y, d::dy);
 	}
 	inline void cross_product(double a1, double a2, double a3, double b1, double b2, double b3, double &out1, double &out2, double &out3) {
@@ -198,43 +199,157 @@ namespace d_op {
 		out2 = a1 * b3 - a3 * b1;
 		out3 = a1 * b2 - a2 * b1;
 	}
-	inline double DF_h4_curl_2d_operator(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
+	inline double DF_h4_curl_2d_operator(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
 		return d_h2::DF_1_order(y_dsf, x, y, d::dy) - d_h4::DF_1_order(x_dsf, x, y, d::dx);
 	}
-	inline double DF_h2_curl_2d_operator(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y) {
+	inline double DF_h2_curl_2d_operator(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
 		return d_h2::DF_1_order(y_dsf, x, y, d::dy) - d_h2::DF_1_order(x_dsf, x, y, d::dx);
 	}
-	inline void DF_h4_lamb_operator_at(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
+	inline void DF_h4_lamb_operator_at(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
 		double curl_z = DF_h4_curl_2d_operator(x_dsf, y_dsf, x, y);
 		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
 	}
-	inline void DF_h2_lamb_operator_at(dsfield &x_dsf, dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
+	inline void DF_h2_lamb_operator_at(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
 		double curl_z = DF_h2_curl_2d_operator(x_dsf, y_dsf, x, y);
 		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
 	}
 }
 
+
+class pooled_thread {
+public:
+	enum class state {
+		running, idle, waiting
+	};
+private:
+	using funcT = std::function<void(void**)>;
+	void* thread_data;//memory leak is allowed actually
+	int await_in_milliseconds;
+	funcT exec_func;
+	bool is_active;
+	mutable state cur_state;
+	mutable state default_state;
+	std::recursive_mutex execution_locker;
+	void start_thread() {
+		std::thread th([this]() {
+			while (is_active) {
+				execution_locker.lock();
+				if (cur_state == state::waiting) {
+					cur_state = state::running;
+					exec_func(&thread_data);
+				}
+				cur_state = default_state;
+				execution_locker.unlock();
+				std::this_thread::sleep_for(std::chrono::milliseconds(await_in_milliseconds));
+			}
+			});
+		th.detach();
+	}
+public:
+	pooled_thread(funcT function = [](void** ptr) {return; }, int awaiting_time = 5) :exec_func(function), await_in_milliseconds(awaiting_time), default_state(state::idle) {
+		thread_data = nullptr;
+		is_active = true;
+		default_state = state::idle;
+		start_thread();
+	}
+	~pooled_thread() {
+		disable();
+	}
+	state get_state() const {
+		return cur_state;
+	}
+	void sign_awaiting() {
+		execution_locker.lock();
+		cur_state = state::waiting;
+		execution_locker.unlock();
+	}
+	void set_new_awaiting_time(int milliseconds) {
+		execution_locker.lock();
+		await_in_milliseconds = milliseconds;
+		execution_locker.unlock();
+	}
+	void set_new_default_state(state def_state = state::idle) {
+		execution_locker.lock();
+		default_state = def_state;
+		execution_locker.unlock();
+	}
+	void set_new_function(funcT func) {
+		execution_locker.lock();
+		exec_func = func;
+		execution_locker.unlock();
+	}
+	void disable() {
+		execution_locker.lock();
+		is_active = false;
+		execution_locker.unlock();
+	}
+	void** __void_ptr_accsess() {
+		return &thread_data;
+	}
+};
+
 namespace gc_iter {
-	int64_t fsize = 32;
-	double iter_speed = 0.01;
+	typedef struct {
+		double denergy, ddensity, dxspeed, dyspeed, xforce, yforce;
+	} step_ans;
+	step_ans operator*(double mul, step_ans sa) {
+		sa.ddensity *= mul;
+		sa.denergy *= mul;
+		sa.dxspeed *= mul;
+		sa.dyspeed *= mul;
+		sa.xforce *= mul;
+		sa.yforce *= mul;
+		return sa;
+	}
+	step_ans operator+(step_ans fa, step_ans sa) {
+		sa.ddensity += fa.ddensity;
+		sa.denergy += fa.denergy;
+		sa.dxspeed += fa.dxspeed;
+		sa.dyspeed += fa.dyspeed;
+		sa.xforce += fa.xforce;
+		sa.yforce += fa.yforce;
+		return sa;
+	}
+	void apply_step_ans(greqit& gr, const step_ans &sa, int64_t x, int64_t y, bool add_flag) {
+		gr.density.at(x, y) = (add_flag * gr.density.at(x, y)) + sa.ddensity;
+		gr.energy.at(x, y) = add_flag * gr.energy.at(x, y) + sa.denergy;
+		gr.x_speed.at(x, y) = add_flag * gr.x_speed.at(x, y) + sa.dxspeed;
+		gr.y_speed.at(x, y) = add_flag * gr.y_speed.at(x, y) + sa.dyspeed;
+		gr.x_force.at(x, y) = add_flag * gr.x_force.at(x, y) + sa.xforce;
+		gr.y_force.at(x, y) = add_flag * gr.y_force.at(x, y) + sa.yforce;
+	}
+	step_ans sum_step_ans(const greqit& gr, step_ans sa, int64_t x, int64_t y, bool add_flag) {
+		sa.ddensity = add_flag * gr.density.at(x, y) + sa.ddensity;
+		sa.denergy = add_flag * gr.energy.at(x, y) + sa.denergy;
+		sa.dxspeed = add_flag * gr.x_speed.at(x, y) + sa.dxspeed;
+		sa.dyspeed = add_flag * gr.y_speed.at(x, y) + sa.dyspeed;
+		sa.xforce = add_flag * gr.x_force.at(x, y) + sa.xforce;
+		sa.yforce = add_flag * gr.y_force.at(x, y) + sa.yforce;
+		return sa;
+	}
+
+	int64_t fsize = 65;
+	double time_step = 0.05;
 	double adiabat = 1.67;
 	double grav_const = 1;
 	////inter-thread-ey variables////
 	volatile bool iter_pause = true, iter_break = false;
-	volatile int threads_count = max(thread::hardware_concurrency() - 1, 3u);
+	volatile int threads_count = max(thread::hardware_concurrency() - 1, 1u);
 	greqit grei_base(fsize, 2);
 	greqit grei_buffer(fsize, 2);
-	volatile bool* finised_flags = nullptr;
-	std::recursive_mutex* rec_mutexes = nullptr;
+	greqit grei_i_buffer(fsize, 2);
+	greqit grei_f0buffer(fsize, 2);
 	std::recursive_mutex global_pause_lock;
 	std::mutex local_lock;
-	double rad_3(int64_t x, int64_t y) {
+	vector<pooled_thread*> threads;
+	int __step_counter = 0;
+	inline double rad_3(int64_t x, int64_t y) {
 		if (!x && !y)
 			return 0.;
 		else
 			return 1. / pow(x * x + y * y, 1.5);
 	}
-	double Fx(int64_t at_x, int64_t at_y) {
+	inline double Fx(int64_t at_x, int64_t at_y) {
 		double sum = 0;
 		for (int64_t x = 0; x < fsize; x++) {
 			for (int64_t y = 0; y < fsize; y++) {
@@ -243,7 +358,7 @@ namespace gc_iter {
 		}
 		return sum;
 	}
-	double Fy(int64_t at_x, int64_t at_y) {
+	inline double Fy(int64_t at_x, int64_t at_y) {
 		double sum = 0;
 		for (int64_t x = 0; x < fsize; x++) {
 			for (int64_t y = 0; y < fsize; y++) {
@@ -253,137 +368,151 @@ namespace gc_iter {
 		return sum;
 	}
 
-	void iter_grei_at(int64_t x, int64_t y) {
-		double t_T = 0;
+	inline step_ans iter_grei_at(int64_t x, int64_t y, const greqit& gfield) {
+		step_ans ans{0};
+		constexpr bool is_test = false;
+		if (is_test) {
+			ans.denergy =
+				d_h4::DF_2_order(gfield.density, x, y, d::dx) + d_h4::DF_2_order(gfield.density, x, y, d::dy);
+			ans.ddensity = gfield.energy.at(x, y);
+			ans.dxspeed = 0;
+			ans.dyspeed = 0;
+			ans.xforce = 0;
+			ans.yforce = 0;
+		}
+		else{
+			ans.xforce = 0;// grav_const * Fx(x, y);
+			ans.yforce = -0.01;// grav_const* Fy(x, y);
 
-		grei_buffer.x_force.at(x, y) = grav_const * Fx(x, y);
-		grei_buffer.y_force.at(x, y) = grav_const * Fy(x, y);
-
-		grei_buffer.density.at(x, y) = grei_base.density.at(x, y) + iter_speed * (
-			-(
-				grei_base.density.at(x, y) * (d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y)) +
-				grei_base.x_speed.at(x, y) * d_h2::DF_1_order(grei_base.density, x, y, d::dx) +
-				grei_base.y_speed.at(x, y) * d_h2::DF_1_order(grei_base.density, x, y, d::dy)
-			)
-		);
-		grei_buffer.energy.at(x, y) = grei_base.energy.at(x, y) + iter_speed * (
-			-(
-				(adiabat - 1) * grei_base.energy.at(x, y) * d_op::divergence_h2(grei_base.x_speed, grei_base.y_speed, x, y) + (
-					grei_base.x_speed.at(x, y) * d_h2::DF_1_order(grei_base.energy, x, y, d::dx) +
-					grei_base.y_speed.at(x, y) * d_h2::DF_1_order(grei_base.energy, x, y, d::dy)
+			ans.ddensity = (
+				-(
+					gfield.density.at(x, y) * (d_op::divergence_h2(gfield.x_speed, gfield.y_speed, x, y)) +
+					gfield.x_speed.at(x, y) * d_h2::DF_1_order(gfield.density, x, y, d::dx) +
+					gfield.y_speed.at(x, y) * d_h2::DF_1_order(gfield.density, x, y, d::dy)
 				)
-			)
-		);
- 		grei_buffer.x_speed.at(x, y) = grei_base.x_speed.at(x, y) + iter_speed * (
-			-(
-				(adiabat - 1) * (
-					d_h2::DF_1_order(grei_base.density, x, y, d::dx) * grei_base.energy.at(x, y) / grei_base.density.at(x, y) +
-					d_h2::DF_1_order(grei_base.energy, x, y, d::dx)
-				) +	(
-					grei_buffer.x_speed.at(x, y) * d_h2::DF_1_order(grei_buffer.x_speed, x, y, d::dx) +
-					grei_buffer.y_speed.at(x, y) * d_h2::DF_1_order(grei_buffer.x_speed, x, y, d::dy)
-				)
-			)
-			+
-			grei_base.x_force.at(x, y)
 			);
-		grei_buffer.y_speed.at(x, y) = grei_base.y_speed.at(x, y) + iter_speed * (
-			-(
-				(adiabat - 1) * (
-					d_h2::DF_1_order(grei_base.density, x, y, d::dy) * grei_base.energy.at(x, y) / grei_base.density.at(x, y) +
-					d_h2::DF_1_order(grei_base.energy, x, y, d::dy)
-				) + (
-					grei_buffer.x_speed.at(x, y) * d_h2::DF_1_order(grei_buffer.y_speed, x, y, d::dx) +
-					grei_buffer.y_speed.at(x, y) * d_h2::DF_1_order(grei_buffer.y_speed, x, y, d::dy)
+			ans.denergy = (
+				-(
+					(adiabat - 1) * gfield.energy.at(x, y) * d_op::divergence_h2(gfield.x_speed, gfield.y_speed, x, y) + (
+						gfield.x_speed.at(x, y) * d_h2::DF_1_order(gfield.energy, x, y, d::dx) +
+						gfield.y_speed.at(x, y) * d_h2::DF_1_order(gfield.energy, x, y, d::dy)
+					)
 				)
-			)
-			+
-			grei_base.y_force.at(x, y)
-		);
+			);
+			ans.dxspeed = (
+				-(
+					(adiabat - 1) * (
+						d_h2::DF_1_order(gfield.density, x, y, d::dx) * gfield.energy.at(x, y) / gfield.density.at(x, y) +
+						d_h2::DF_1_order(gfield.energy, x, y, d::dx)
+					) +	(
+						gfield.x_speed.at(x, y) * d_h2::DF_1_order(gfield.x_speed, x, y, d::dx) +
+						gfield.y_speed.at(x, y) * d_h2::DF_1_order(gfield.x_speed, x, y, d::dy)
+					)
+				)
+				+
+				gfield.x_force.at(x, y)
+				);
+			ans.dyspeed = (
+				-(
+					(adiabat - 1) * (
+						d_h2::DF_1_order(gfield.density, x, y, d::dy) * gfield.energy.at(x, y) / gfield.density.at(x, y) +
+						d_h2::DF_1_order(gfield.energy, x, y, d::dy)
+					) + (
+						gfield.x_speed.at(x, y) * d_h2::DF_1_order(gfield.y_speed, x, y, d::dx) +
+						gfield.y_speed.at(x, y) * d_h2::DF_1_order(gfield.y_speed, x, y, d::dy)
+					)
+				)
+				+
+				gfield.y_force.at(x, y)
+			);
+		}
+		return ans;
 	}
 
 	void create_iter_threads() {
 		gc_iter::iter_pause = false;
 		gc_iter::iter_break = false;
-		if (rec_mutexes)
-			delete[] rec_mutexes;
-		if (finised_flags)
-			delete[] finised_flags;
-		finised_flags = new bool[threads_count];
-		rec_mutexes = new std::recursive_mutex[threads_count];
-		for (int thi = 0; thi < threads_count; thi++)
-			finised_flags[thi] = false;
-		
+
+		typedef struct {
+			int id;
+			int64_t start, end, fsize;
+			int *step_counter;
+		} thread_info;
+
 		local_lock.lock();
 		for (int thid = 0; thid < threads_count; thid++) {
-			std::thread th([&](const int thi) {
-				finised_flags[thi] = false;
-				const int64_t start = (thi) * fsize / (threads_count);
-				const int64_t end = (thi + 1) * fsize / (threads_count);
-				while (!iter_break) {
-					local_lock.lock();
-					local_lock.unlock();
-					finised_flags[thi] = false;
-					rec_mutexes[thi].lock();
-					for (int64_t x = start; x < end; x++) {
-						for (int64_t y = 0; y < fsize; y++) {
-							iter_grei_at(x, y);
-						}
-					}
-					finised_flags[thi] = true;
-					rec_mutexes[thi].unlock();
-					//printf("unlocked\n");
-					global_pause_lock.lock();
-					global_pause_lock.unlock();
-					//printf("released\n");
-				}
-				}, thid);
-			th.detach();
-		}
-		std::thread th_checker([&]() {
-			while (!iter_break) {
-				local_lock.lock();
-				local_lock.unlock();
-				global_pause_lock.lock();
-				bool flag = true;
-				while (flag) {
-					Sleep(5);
-					flag = false;
-					for (int thi = 0; thi < threads_count; thi++) {
-						if (!finised_flags[thi]) {
-							flag = true;
-							break;
-						}
-					}
-				}
-				//printf("G: unlocked\n");
-				grei_base.swap(grei_buffer);
-				global_pause_lock.unlock();
-				//printf("G: released\n");
-				local_lock.lock();
-				Sleep(13);
-				local_lock.unlock();
-			}
-			});
-		th_checker.detach();
+			const int64_t start = (thid)*fsize / (threads_count);
+			const int64_t end = (thid + 1) * fsize / (threads_count);
 
+			threads.push_back(new pooled_thread()); // executors
+			auto t = threads.back()->__void_ptr_accsess();
+			*t = (void*)(new thread_info{thid, start, end, fsize, &__step_counter});
+			threads.back()->set_new_function([](void** void_ptr) {
+				thread_info** pptr = (thread_info**)void_ptr;
+				const int s_cnt = *(*pptr)->step_counter;
+				constexpr bool is_dbg_printf = false;
+				constexpr step_ans zero_sa{ 0,0,0,0,0,0 };
+				global_pause_lock.lock();
+				for (int64_t x = (*pptr)->start; x < (*pptr)->end; x++) {
+					for (int64_t y = 0; y < (*pptr)->fsize; y++) {
+						if (!s_cnt) {//prognosis
+							auto dgrei = time_step * iter_grei_at(x, y, grei_base);
+							apply_step_ans(grei_f0buffer, dgrei, x, y, false);
+							dgrei = sum_step_ans(grei_base, dgrei, x, y, true);
+							apply_step_ans(grei_i_buffer, 
+									dgrei, 
+								x, y, false);
+
+							if(is_dbg_printf) 
+								printf("%i: (%i:%i) D:%lf E:%lf X:%lf Y:%lf FX:%lf FY:%lf\n", s_cnt, x, y, dgrei.ddensity, dgrei.denergy, dgrei.dxspeed, dgrei.dyspeed, dgrei.xforce, dgrei.yforce);
+						}
+						else {//correction
+							auto dbuffer = time_step * iter_grei_at(x, y, grei_buffer);
+							auto f_0 = sum_step_ans(grei_f0buffer, zero_sa, x, y, true);
+							dbuffer = 0.5 * (f_0 + dbuffer);
+							apply_step_ans(grei_i_buffer,
+								sum_step_ans(grei_base, dbuffer, x, y, true),
+								x, y, false);
+
+							if (is_dbg_printf) {
+								printf("%i: (%i:%i) D:%lf E:%lf X:%lf Y:%lf FX:%lf FY:%lf\n", s_cnt, x, y, dbuffer.ddensity, dbuffer.denergy, dbuffer.dxspeed, dbuffer.dyspeed, dbuffer.xforce, dbuffer.yforce);
+							}
+						}
+					}
+				}
+				global_pause_lock.unlock();
+			});
+			threads.back()->sign_awaiting();
+		}
+		threads.push_back(new pooled_thread());//observer
+		threads.back()->set_new_awaiting_time(10);
+		threads.back()->set_new_default_state(pooled_thread::state::waiting);
+		threads.back()->set_new_function([](void** ptr) {
+			for (auto ptr : threads)
+				if (ptr != threads.back() && ptr->get_state() != pooled_thread::state::idle) {
+					threads.back()->sign_awaiting();
+					return;
+				}
+
+			global_pause_lock.lock();
+
+			if (__step_counter == 5) {
+				grei_base.swap(grei_i_buffer);
+				__step_counter = 0;
+				printf("prediction\n");
+			}
+			else {
+				grei_i_buffer.swap(grei_buffer);
+				__step_counter++;
+				printf("correction\n");
+			}
+
+			global_pause_lock.unlock();
+			for (auto ptr : threads)
+				ptr->sign_awaiting();
+		});
+		threads.back()->sign_awaiting();
 		local_lock.unlock();
 	}
-	void create_single_thread() {
-		thread th([&]() {
-			while (true) {
-				global_pause_lock.lock();
-				for (int64_t x = 0; x < fsize; x++) {
-					for (int64_t y = 0; y < fsize; y++) {
-						iter_grei_at(x, y);
-					}
-				}
-				grei_base.swap(grei_buffer);
-				global_pause_lock.unlock();
-			}
-			});
-		th.detach();
-	}
-
 }
 
