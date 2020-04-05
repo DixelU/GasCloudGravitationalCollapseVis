@@ -108,12 +108,10 @@ typedef struct drawable_square_field {
 	double garbage_var, outside_val;
 	double&(*edge_handler)(field&, int64_t, int64_t, double&);
 	const double&(*const_edge_handler)(const field&, int64_t, int64_t, const double&);
-	int64_t field_size;
-	double cell_size;
 	drawable_square_field(size_t n = 100, double outside_val = 0.,
 		double&(*edge_handler)(field&, int64_t, int64_t, double&) = continue_edge,
 		const double&(*const_edge_handler)(const field&, int64_t, int64_t, const double&) = c_continue_edge
-	) : field_size(n), outside_val(outside_val), edge_handler(edge_handler), const_edge_handler(const_edge_handler){
+	) : outside_val(outside_val), edge_handler(edge_handler), const_edge_handler(const_edge_handler){
 		line ld(n, 0);
 		fd.assign(n, ld);
 		garbage_var = 0;

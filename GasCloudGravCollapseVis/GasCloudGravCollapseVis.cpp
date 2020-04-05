@@ -2696,7 +2696,7 @@ void mDisplay() {
 
 					exp((-pow(x - gc_iter::fsize * 0.35, 2) - pow(y - gc_iter::fsize * 0.35, 2)) / pow(gc_iter::fsize / 24, 2)) * 5.
 					+ 1;
-				e_dsf.at(x, y) = 1.;/// d_dsf.at(x, y);
+				e_dsf.at(x, y) = 0.;/// d_dsf.at(x, y);
 			}
 		}
 

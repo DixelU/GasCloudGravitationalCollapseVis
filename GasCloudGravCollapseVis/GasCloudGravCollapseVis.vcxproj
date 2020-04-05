@@ -176,6 +176,7 @@
     <ClInclude Include="field_vis.h" />
     <ClInclude Include="grav_eq_iterator.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="pooled_thread.h" />
     <ClInclude Include="weird_hacks.h" />
   </ItemGroup>
   <ItemGroup>

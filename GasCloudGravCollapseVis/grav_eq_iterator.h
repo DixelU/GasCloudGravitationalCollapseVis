@@ -5,6 +5,7 @@
 #include "field_vis.h"
 #include "weird_hacks.h"
 #include "consts.h"
+#include "pooled_thread.h"
 
 using namespace std;
 
@@ -72,82 +73,82 @@ struct greqit {
 };
 
 namespace d_h2 {
-	inline double _finite_difference_1st_order(double left1, double right1) {
+	inline double _first_finite_difference(double left1, double right1) {
 		return (right1 - left1)*0.5;
 	}
-	inline double _finite_difference_1st_order_x(const dsfield &dsf, int64_t x, int64_t y) {
-		return _finite_difference_1st_order(
+	inline double _first_finite_difference_x(const dsfield &dsf, int64_t x, int64_t y) {
+		return _first_finite_difference(
 			dsf.at(x - 1, y),
 			dsf.at(x + 1, y)
 		);
 	}
-	inline double _finite_difference_1st_order_y(const dsfield &dsf, int64_t x, int64_t y) {
-		return _finite_difference_1st_order(
+	inline double _first_finite_difference_y(const dsfield &dsf, int64_t x, int64_t y) {
+		return _first_finite_difference(
 			dsf.at(x, y - 1),
 			dsf.at(x, y + 1)
 		);
 	}
-	inline double _finite_difference_2nd_order(double left1, double center, double right1) {
+	inline double _second_finite_difference(double left1, double center, double right1) {
 		return (left1 - 2.*center + right1);
 	}
-	inline double _finite_difference_2nd_order_xx(const dsfield &dsf, int64_t x, int64_t y) {
-		return _finite_difference_2nd_order(
+	inline double _second_finite_difference_xx(const dsfield &dsf, int64_t x, int64_t y) {
+		return _second_finite_difference(
 			dsf.at(x - 1, y),
 			dsf.at(x, y),
 			dsf.at(x + 1, y)
 		);
 	}
-	inline double _finite_difference_2nd_order_yy(const dsfield &dsf, int64_t x, int64_t y) {
-		return _finite_difference_2nd_order(
+	inline double _second_finite_difference_yy(const dsfield &dsf, int64_t x, int64_t y) {
+		return _second_finite_difference(
 			dsf.at(x, y - 1),
 			dsf.at(x, y),
 			dsf.at(x, y + 1)
 		);
 	}
-	inline double DF_2_order(const dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline double second_difference(const dsfield &dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
-			return _finite_difference_2nd_order_xx(dsf, x, y);
+			return _second_finite_difference_xx(dsf, x, y);
 		case d::dy:
-			return _finite_difference_2nd_order_yy(dsf, x, y);
+			return _second_finite_difference_yy(dsf, x, y);
 		}
 		return 0;
 	}
-	inline double DF_1_order(const dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline double first_difference(const dsfield &dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
-			return _finite_difference_1st_order_x(dsf, x, y);
+			return _first_finite_difference_x(dsf, x, y);
 		case d::dy:
-			return _finite_difference_1st_order_y(dsf, x, y);
+			return _first_finite_difference_y(dsf, x, y);
 		}
 	}
 }
 
 namespace d_h4 {
-	inline double _finite_difference_1st_order(double left2, double left1, double right1, const double& right2) {
+	inline double _first_finite_difference(double left2, double left1, double right1, const double& right2) {
 		return (.25*left2 - 2 * left1 + 2 * right1 - .25*right2) / 3.;
 	}
-	inline double _finite_difference_1st_order_x(const dsfield &dsf, int64_t x, int64_t y) {
-		return _finite_difference_1st_order(
+	inline double _first_finite_difference_x(const dsfield &dsf, int64_t x, int64_t y) {
+		return _first_finite_difference(
 			dsf.at(x - 2, y),
 			dsf.at(x - 1, y),
 			dsf.at(x + 1, y),
 			dsf.at(x + 2, y)
 		);
 	}
-	inline double _finite_difference_1st_order_y(const dsfield &dsf, int64_t x, int64_t y) {
-		return _finite_difference_1st_order(
+	inline double _first_finite_difference_y(const dsfield &dsf, int64_t x, int64_t y) {
+		return _first_finite_difference(
 			dsf.at(x, y - 2),
 			dsf.at(x, y - 1),
 			dsf.at(x, y + 1),
 			dsf.at(x, y + 2)
 		);
 	}
-	inline double _finite_difference_2nd_order(double left2, double left1, double center, double right1, double right2) {
+	inline double _second_finite_difference(double left2, double left1, double center, double right1, double right2) {
 		return (-.25*left2 + 4. * left1 - 7.5*center + 4. * right1 - .25*right2) / 3.;
 	}
-	inline double _finite_difference_2nd_order_xx(const dsfield &dsf, int64_t x, int64_t y) {
-		return _finite_difference_2nd_order(
+	inline double _second_finite_difference_xx(const dsfield &dsf, int64_t x, int64_t y) {
+		return _second_finite_difference(
 			dsf.at(x - 2, y),
 			dsf.at(x - 1, y),
 			dsf.at(x, y),
@@ -155,8 +156,8 @@ namespace d_h4 {
 			dsf.at(x + 2, y)
 		);
 	}
-	inline double _finite_difference_2nd_order_yy(const dsfield &dsf, int64_t x, int64_t y) {
-		return _finite_difference_2nd_order(
+	inline double _second_finite_difference_yy(const dsfield &dsf, int64_t x, int64_t y) {
+		return _second_finite_difference(
 			dsf.at(x, y - 2),
 			dsf.at(x, y - 1),
 			dsf.at(x, y),
@@ -164,35 +165,35 @@ namespace d_h4 {
 			dsf.at(x, y + 2)
 		);
 	}
-	inline double DF_2_order(const dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline double second_difference(const dsfield &dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
-			return _finite_difference_2nd_order_xx(dsf, x, y);
+			return _second_finite_difference_xx(dsf, x, y);
 		case d::dy:
-			return _finite_difference_2nd_order_yy(dsf, x, y);
+			return _second_finite_difference_yy(dsf, x, y);
 		}
 		return 0;
 	}
-	inline double DF_1_order(const dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline double first_difference(const dsfield &dsf, int64_t x, int64_t y, d diff) {
 		if (diff == d::dx)
-			return _finite_difference_1st_order_x(dsf, x, y);
+			return _first_finite_difference_x(dsf, x, y);
 		else
-			return _finite_difference_1st_order_y(dsf, x, y);
+			return _first_finite_difference_y(dsf, x, y);
 	}
 }
 
 namespace d_op {
 	inline double divergence_h4(const dsfield &dsf, int64_t x, int64_t y) {
-		return d_h4::DF_1_order(dsf, x, y, d::dx) + d_h4::DF_1_order(dsf, x, y, d::dy);
+		return d_h4::first_difference(dsf, x, y, d::dx) + d_h4::first_difference(dsf, x, y, d::dy);
 	}
 	inline double divergence_h2(const dsfield &dsf, int64_t x, int64_t y) {
-		return d_h2::DF_1_order(dsf, x, y, d::dx) + d_h2::DF_1_order(dsf, x, y, d::dy);
+		return d_h2::first_difference(dsf, x, y, d::dx) + d_h2::first_difference(dsf, x, y, d::dy);
 	}
 	inline double divergence_h4(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
-		return d_h4::DF_1_order(x_dsf, x, y, d::dx) + d_h4::DF_1_order(y_dsf, x, y, d::dy);
+		return d_h4::first_difference(x_dsf, x, y, d::dx) + d_h4::first_difference(y_dsf, x, y, d::dy);
 	}
 	inline double divergence_h2(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
-		return d_h2::DF_1_order(x_dsf, x, y, d::dx) + d_h2::DF_1_order(y_dsf, x, y, d::dy);
+		return d_h2::first_difference(x_dsf, x, y, d::dx) + d_h2::first_difference(y_dsf, x, y, d::dy);
 	}
 	inline void cross_product(double a1, double a2, double a3, double b1, double b2, double b3, double &out1, double &out2, double &out3) {
 		out1 = a2 * b3 - a3 * b2;
@@ -200,10 +201,10 @@ namespace d_op {
 		out3 = a1 * b2 - a2 * b1;
 	}
 	inline double DF_h4_curl_2d_operator(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
-		return d_h2::DF_1_order(y_dsf, x, y, d::dy) - d_h4::DF_1_order(x_dsf, x, y, d::dx);
+		return d_h2::first_difference(y_dsf, x, y, d::dy) - d_h4::first_difference(x_dsf, x, y, d::dx);
 	}
 	inline double DF_h2_curl_2d_operator(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
-		return d_h2::DF_1_order(y_dsf, x, y, d::dy) - d_h2::DF_1_order(x_dsf, x, y, d::dx);
+		return d_h2::first_difference(y_dsf, x, y, d::dy) - d_h2::first_difference(x_dsf, x, y, d::dx);
 	}
 	inline void DF_h4_lamb_operator_at(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
 		double curl_z = DF_h4_curl_2d_operator(x_dsf, y_dsf, x, y);
@@ -214,79 +215,6 @@ namespace d_op {
 		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
 	}
 }
-
-
-class pooled_thread {
-public:
-	enum class state {
-		running, idle, waiting
-	};
-private:
-	using funcT = std::function<void(void**)>;
-	void* thread_data;//memory leak is allowed actually
-	int await_in_milliseconds;
-	funcT exec_func;
-	bool is_active;
-	mutable state cur_state;
-	mutable state default_state;
-	std::recursive_mutex execution_locker;
-	void start_thread() {
-		std::thread th([this]() {
-			while (is_active) {
-				execution_locker.lock();
-				if (cur_state == state::waiting) {
-					cur_state = state::running;
-					exec_func(&thread_data);
-				}
-				cur_state = default_state;
-				execution_locker.unlock();
-				std::this_thread::sleep_for(std::chrono::milliseconds(await_in_milliseconds));
-			}
-			});
-		th.detach();
-	}
-public:
-	pooled_thread(funcT function = [](void** ptr) {return; }, int awaiting_time = 5) :exec_func(function), await_in_milliseconds(awaiting_time), default_state(state::idle) {
-		thread_data = nullptr;
-		is_active = true;
-		default_state = state::idle;
-		start_thread();
-	}
-	~pooled_thread() {
-		disable();
-	}
-	state get_state() const {
-		return cur_state;
-	}
-	void sign_awaiting() {
-		execution_locker.lock();
-		cur_state = state::waiting;
-		execution_locker.unlock();
-	}
-	void set_new_awaiting_time(int milliseconds) {
-		execution_locker.lock();
-		await_in_milliseconds = milliseconds;
-		execution_locker.unlock();
-	}
-	void set_new_default_state(state def_state = state::idle) {
-		execution_locker.lock();
-		default_state = def_state;
-		execution_locker.unlock();
-	}
-	void set_new_function(funcT func) {
-		execution_locker.lock();
-		exec_func = func;
-		execution_locker.unlock();
-	}
-	void disable() {
-		execution_locker.lock();
-		is_active = false;
-		execution_locker.unlock();
-	}
-	void** __void_ptr_accsess() {
-		return &thread_data;
-	}
-};
 
 namespace gc_iter {
 	typedef struct {
@@ -367,13 +295,12 @@ namespace gc_iter {
 		}
 		return sum;
 	}
-
 	inline step_ans iter_grei_at(int64_t x, int64_t y, const greqit& gfield) {
 		step_ans ans{0};
-		constexpr bool is_test = false;
+		constexpr bool is_test = true;
 		if (is_test) {
 			ans.denergy =
-				d_h4::DF_2_order(gfield.density, x, y, d::dx) + d_h4::DF_2_order(gfield.density, x, y, d::dy);
+				d_h4::second_difference(gfield.density, x, y, d::dx) + d_h4::second_difference(gfield.density, x, y, d::dy);
 			ans.ddensity = gfield.energy.at(x, y);
 			ans.dxspeed = 0;
 			ans.dyspeed = 0;
@@ -387,26 +314,26 @@ namespace gc_iter {
 			ans.ddensity = (
 				-(
 					gfield.density.at(x, y) * (d_op::divergence_h2(gfield.x_speed, gfield.y_speed, x, y)) +
-					gfield.x_speed.at(x, y) * d_h2::DF_1_order(gfield.density, x, y, d::dx) +
-					gfield.y_speed.at(x, y) * d_h2::DF_1_order(gfield.density, x, y, d::dy)
+					gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.density, x, y, d::dx) +
+					gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.density, x, y, d::dy)
 				)
 			);
 			ans.denergy = (
 				-(
 					(adiabat - 1) * gfield.energy.at(x, y) * d_op::divergence_h2(gfield.x_speed, gfield.y_speed, x, y) + (
-						gfield.x_speed.at(x, y) * d_h2::DF_1_order(gfield.energy, x, y, d::dx) +
-						gfield.y_speed.at(x, y) * d_h2::DF_1_order(gfield.energy, x, y, d::dy)
+						gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.energy, x, y, d::dx) +
+						gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.energy, x, y, d::dy)
 					)
 				)
 			);
 			ans.dxspeed = (
 				-(
 					(adiabat - 1) * (
-						d_h2::DF_1_order(gfield.density, x, y, d::dx) * gfield.energy.at(x, y) / gfield.density.at(x, y) +
-						d_h2::DF_1_order(gfield.energy, x, y, d::dx)
+						d_h2::first_difference(gfield.density, x, y, d::dx) * gfield.energy.at(x, y) / gfield.density.at(x, y) +
+						d_h2::first_difference(gfield.energy, x, y, d::dx)
 					) +	(
-						gfield.x_speed.at(x, y) * d_h2::DF_1_order(gfield.x_speed, x, y, d::dx) +
-						gfield.y_speed.at(x, y) * d_h2::DF_1_order(gfield.x_speed, x, y, d::dy)
+						gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.x_speed, x, y, d::dx) +
+						gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.x_speed, x, y, d::dy)
 					)
 				)
 				+
@@ -415,11 +342,11 @@ namespace gc_iter {
 			ans.dyspeed = (
 				-(
 					(adiabat - 1) * (
-						d_h2::DF_1_order(gfield.density, x, y, d::dy) * gfield.energy.at(x, y) / gfield.density.at(x, y) +
-						d_h2::DF_1_order(gfield.energy, x, y, d::dy)
+						d_h2::first_difference(gfield.density, x, y, d::dy) * gfield.energy.at(x, y) / gfield.density.at(x, y) +
+						d_h2::first_difference(gfield.energy, x, y, d::dy)
 					) + (
-						gfield.x_speed.at(x, y) * d_h2::DF_1_order(gfield.y_speed, x, y, d::dx) +
-						gfield.y_speed.at(x, y) * d_h2::DF_1_order(gfield.y_speed, x, y, d::dy)
+						gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.y_speed, x, y, d::dx) +
+						gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.y_speed, x, y, d::dy)
 					)
 				)
 				+
