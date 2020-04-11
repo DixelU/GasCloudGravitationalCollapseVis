@@ -9,10 +9,6 @@
 
 using namespace std;
 
-enum class d {
-	dx, dy, dxy
-};
-
 struct greqit {
 	dsfield density,
 		x_speed,
@@ -72,49 +68,62 @@ struct greqit {
 	}
 };
 
-namespace d_h2 {
-	inline double _first_finite_difference(double left1, double right1) {
-		return (right1 - left1)*0.5;
+enum class d {
+	dx, dy, dxy
+};
+
+class d_h2 {
+	inline static double _first_finite_difference(double left1, double right1) {
+		return (right1 - left1) * 0.5;
 	}
-	inline double _first_finite_difference_x(const dsfield &dsf, int64_t x, int64_t y) {
+	inline static double _first_finite_difference_x(const dsfield& dsf, int64_t x, int64_t y) {
 		return _first_finite_difference(
 			dsf.at(x - 1, y),
 			dsf.at(x + 1, y)
-		);
+			);
 	}
-	inline double _first_finite_difference_y(const dsfield &dsf, int64_t x, int64_t y) {
+	inline static double _first_finite_difference_y(const dsfield& dsf, int64_t x, int64_t y) {
 		return _first_finite_difference(
 			dsf.at(x, y - 1),
 			dsf.at(x, y + 1)
-		);
+			);
 	}
-	inline double _second_finite_difference(double left1, double center, double right1) {
-		return (left1 - 2.*center + right1);
+	inline static double _second_finite_difference(double left1, double center, double right1) {
+		return (left1 - 2. * center + right1);
 	}
-	inline double _second_finite_difference_xx(const dsfield &dsf, int64_t x, int64_t y) {
+	inline static double _second_finite_difference_xx(const dsfield& dsf, int64_t x, int64_t y) {
 		return _second_finite_difference(
 			dsf.at(x - 1, y),
 			dsf.at(x, y),
 			dsf.at(x + 1, y)
-		);
+			);
 	}
-	inline double _second_finite_difference_yy(const dsfield &dsf, int64_t x, int64_t y) {
+	inline static double _second_finite_difference_yy(const dsfield& dsf, int64_t x, int64_t y) {
 		return _second_finite_difference(
 			dsf.at(x, y - 1),
 			dsf.at(x, y),
 			dsf.at(x, y + 1)
-		);
+			);
 	}
-	inline double second_difference(const dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline static double _second_finite_difference_xy(const dsfield& dsf, int64_t x, int64_t y) {
+		return _first_finite_difference(
+			_first_finite_difference_x(dsf, x, y - 1),
+			_first_finite_difference_x(dsf, x, y + 1)
+			);
+	}
+public:
+	inline static double second_difference(const dsfield& dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
 			return _second_finite_difference_xx(dsf, x, y);
 		case d::dy:
 			return _second_finite_difference_yy(dsf, x, y);
+		case d::dxy:
+		default:
+			return _second_finite_difference_xy(dsf, x, y);
 		}
-		return 0;
 	}
-	inline double first_difference(const dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline static double first_difference(const dsfield& dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
 			return _first_finite_difference_x(dsf, x, y);
@@ -122,99 +131,111 @@ namespace d_h2 {
 			return _first_finite_difference_y(dsf, x, y);
 		}
 	}
-}
+};
 
-namespace d_h4 {
-	inline double _first_finite_difference(double left2, double left1, double right1, const double& right2) {
-		return (.25*left2 - 2 * left1 + 2 * right1 - .25*right2) / 3.;
+class d_h4 {
+	inline static double _first_finite_difference(double left2, double left1, double right1, const double& right2) {
+		return (.25 * left2 - 2 * left1 + 2 * right1 - .25 * right2) / 3.;
 	}
-	inline double _first_finite_difference_x(const dsfield &dsf, int64_t x, int64_t y) {
+	inline static double _first_finite_difference_x(const dsfield& dsf, int64_t x, int64_t y) {
 		return _first_finite_difference(
 			dsf.at(x - 2, y),
 			dsf.at(x - 1, y),
 			dsf.at(x + 1, y),
 			dsf.at(x + 2, y)
-		);
+			);
 	}
-	inline double _first_finite_difference_y(const dsfield &dsf, int64_t x, int64_t y) {
+	inline static double _first_finite_difference_y(const dsfield& dsf, int64_t x, int64_t y) {
 		return _first_finite_difference(
 			dsf.at(x, y - 2),
 			dsf.at(x, y - 1),
 			dsf.at(x, y + 1),
 			dsf.at(x, y + 2)
-		);
+			);
 	}
-	inline double _second_finite_difference(double left2, double left1, double center, double right1, double right2) {
-		return (-.25*left2 + 4. * left1 - 7.5*center + 4. * right1 - .25*right2) / 3.;
+	inline static double _second_finite_difference(double left2, double left1, double center, double right1, double right2) {
+		return (-.25 * left2 + 4. * left1 - 7.5 * center + 4. * right1 - .25 * right2) / 3.;
 	}
-	inline double _second_finite_difference_xx(const dsfield &dsf, int64_t x, int64_t y) {
+	inline static double _second_finite_difference_xx(const dsfield& dsf, int64_t x, int64_t y) {
 		return _second_finite_difference(
 			dsf.at(x - 2, y),
 			dsf.at(x - 1, y),
 			dsf.at(x, y),
 			dsf.at(x + 1, y),
 			dsf.at(x + 2, y)
-		);
+			);
 	}
-	inline double _second_finite_difference_yy(const dsfield &dsf, int64_t x, int64_t y) {
+	inline static double _second_finite_difference_yy(const dsfield& dsf, int64_t x, int64_t y) {
 		return _second_finite_difference(
 			dsf.at(x, y - 2),
 			dsf.at(x, y - 1),
 			dsf.at(x, y),
 			dsf.at(x, y + 1),
 			dsf.at(x, y + 2)
-		);
+			);
 	}
-	inline double second_difference(const dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline static double _second_finite_difference_xy(const dsfield& dsf, int64_t x, int64_t y) {
+		return _first_finite_difference(
+			_first_finite_difference_x(dsf, x, y - 2),
+			_first_finite_difference_x(dsf, x, y - 1),
+			_first_finite_difference_x(dsf, x, y + 1),
+			_first_finite_difference_x(dsf, x, y + 2)
+			);
+	}
+public:
+	inline static double second_difference(const dsfield& dsf, int64_t x, int64_t y, d diff) {
 		switch (diff) {
 		case d::dx:
 			return _second_finite_difference_xx(dsf, x, y);
 		case d::dy:
 			return _second_finite_difference_yy(dsf, x, y);
+		case d::dxy:
+		default:
+			_second_finite_difference_xy(dsf, x, y);
 		}
-		return 0;
 	}
-	inline double first_difference(const dsfield &dsf, int64_t x, int64_t y, d diff) {
+	inline static double first_difference(const dsfield& dsf, int64_t x, int64_t y, d diff) {
 		if (diff == d::dx)
 			return _first_finite_difference_x(dsf, x, y);
 		else
 			return _first_finite_difference_y(dsf, x, y);
 	}
-}
+};
 
-namespace d_op {
-	inline double divergence_h4(const dsfield &dsf, int64_t x, int64_t y) {
-		return d_h4::first_difference(dsf, x, y, d::dx) + d_h4::first_difference(dsf, x, y, d::dy);
-	}
-	inline double divergence_h2(const dsfield &dsf, int64_t x, int64_t y) {
-		return d_h2::first_difference(dsf, x, y, d::dx) + d_h2::first_difference(dsf, x, y, d::dy);
-	}
-	inline double divergence_h4(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
-		return d_h4::first_difference(x_dsf, x, y, d::dx) + d_h4::first_difference(y_dsf, x, y, d::dy);
-	}
-	inline double divergence_h2(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
-		return d_h2::first_difference(x_dsf, x, y, d::dx) + d_h2::first_difference(y_dsf, x, y, d::dy);
-	}
-	inline void cross_product(double a1, double a2, double a3, double b1, double b2, double b3, double &out1, double &out2, double &out3) {
+class d_op {
+	inline static void cross_product(double a1, double a2, double a3, double b1, double b2, double b3, double& out1, double& out2, double& out3) {
 		out1 = a2 * b3 - a3 * b2;
 		out2 = a1 * b3 - a3 * b1;
 		out3 = a1 * b2 - a2 * b1;
 	}
-	inline double DF_h4_curl_2d_operator(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
+public:
+	inline static double divergence_h4(const dsfield& dsf, int64_t x, int64_t y) {
+		return d_h4::first_difference(dsf, x, y, d::dx) + d_h4::first_difference(dsf, x, y, d::dy);
+	}
+	inline static double divergence_h2(const dsfield& dsf, int64_t x, int64_t y) {
+		return d_h2::first_difference(dsf, x, y, d::dx) + d_h2::first_difference(dsf, x, y, d::dy);
+	}
+	inline static double divergence_h4(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
+		return d_h4::first_difference(x_dsf, x, y, d::dx) + d_h4::first_difference(y_dsf, x, y, d::dy);
+	}
+	inline static double divergence_h2(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
+		return d_h2::first_difference(x_dsf, x, y, d::dx) + d_h2::first_difference(y_dsf, x, y, d::dy);
+	}
+	inline static double DF_h4_curl_2d_operator(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
 		return d_h2::first_difference(y_dsf, x, y, d::dy) - d_h4::first_difference(x_dsf, x, y, d::dx);
 	}
-	inline double DF_h2_curl_2d_operator(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y) {
+	inline static double DF_h2_curl_2d_operator(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
 		return d_h2::first_difference(y_dsf, x, y, d::dy) - d_h2::first_difference(x_dsf, x, y, d::dx);
 	}
-	inline void DF_h4_lamb_operator_at(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
+	inline static void DF_h4_lamb_operator_at(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y, double& out_x, double& out_y) {
 		double curl_z = DF_h4_curl_2d_operator(x_dsf, y_dsf, x, y);
 		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
 	}
-	inline void DF_h2_lamb_operator_at(const dsfield &x_dsf, const dsfield &y_dsf, int64_t x, int64_t y, double &out_x, double &out_y) {
+	inline static void DF_h2_lamb_operator_at(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y, double& out_x, double& out_y) {
 		double curl_z = DF_h2_curl_2d_operator(x_dsf, y_dsf, x, y);
 		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
 	}
-}
+};
 
 namespace gc_iter {
 	typedef struct {
@@ -423,15 +444,15 @@ namespace gc_iter {
 
 			global_pause_lock.lock();
 
-			if (__step_counter == 5) {
+			if (__step_counter == 4) {
 				grei_base.swap(grei_i_buffer);
 				__step_counter = 0;
-				printf("prediction\n");
+				//printf("prediction\n");
 			}
 			else {
 				grei_i_buffer.swap(grei_buffer);
 				__step_counter++;
-				printf("correction\n");
+				//printf("correction\n");
 			}
 
 			global_pause_lock.unlock();
