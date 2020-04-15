@@ -2580,7 +2580,7 @@ struct FieldAdapter : HandleableUIPart {
 	}
 	void Draw() override {
 		gc_iter::local_lock.lock();
-		draw_dsfield(*dsf, x, y, side_size * 0.5, 2 * RANGE / (min(WindX, WindY)), brightness);
+		draw_dsfield(*dsf, x, y, side_size * 0.5, 2 * (RANGE / (min(WINDXSIZE, WINDYSIZE))), brightness);
 		gc_iter::local_lock.unlock();
 	}
 	void SafeMove(float dx, float dy) override {
@@ -2652,9 +2652,6 @@ void OnSelectPropList(int ID) {
 		Field_Adapter_ptr->dsf = &gc_iter::grei_base.y_force; break;
 	}
 }
-void Break() {
-	gc_iter::iter_break = true;
-}
 
 ButtonSettings* BS_List_Black_Small = new ButtonSettings(System_White, 0, 0, 100, 10, 1, 0, 0, 0xFFEFDFFF, 0x00003F7F, 0x7F7F7FFF);
 
@@ -2704,6 +2701,7 @@ void mDisplay() {
 		gc_iter::grei_base.energy.swap(e_dsf);
 
 		gc_iter::create_iter_threads();
+		Pause();
 
 		WH = new WindowsHandler();
 		Init();

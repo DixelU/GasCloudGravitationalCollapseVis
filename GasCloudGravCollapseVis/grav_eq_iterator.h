@@ -260,7 +260,7 @@ namespace gc_iter {
 		return sa;
 	}
 	void apply_step_ans(greqit& gr, const step_ans &sa, int64_t x, int64_t y, bool add_flag) {
-		gr.density.at(x, y) = (add_flag * gr.density.at(x, y)) + sa.ddensity;
+		gr.density.at(x, y) = (add_flag * gr.density.at(x, y)) + sa.ddensity;//apply_step_ans
 		gr.energy.at(x, y) = add_flag * gr.energy.at(x, y) + sa.denergy;
 		gr.x_speed.at(x, y) = add_flag * gr.x_speed.at(x, y) + sa.dxspeed;
 		gr.y_speed.at(x, y) = add_flag * gr.y_speed.at(x, y) + sa.dyspeed;
@@ -268,7 +268,7 @@ namespace gc_iter {
 		gr.y_force.at(x, y) = add_flag * gr.y_force.at(x, y) + sa.yforce;
 	}
 	step_ans sum_step_ans(const greqit& gr, step_ans sa, int64_t x, int64_t y, bool add_flag) {
-		sa.ddensity = add_flag * gr.density.at(x, y) + sa.ddensity;
+		sa.ddensity = add_flag * gr.density.at(x, y) + sa.ddensity;//sum_step_ans
 		sa.denergy = add_flag * gr.energy.at(x, y) + sa.denergy;
 		sa.dxspeed = add_flag * gr.x_speed.at(x, y) + sa.dxspeed;
 		sa.dyspeed = add_flag * gr.y_speed.at(x, y) + sa.dyspeed;
@@ -277,13 +277,12 @@ namespace gc_iter {
 		return sa;
 	}
 
-	int64_t fsize = 65;
-	double time_step = 0.05;
+	int64_t fsize = 32;
+	double time_step = 0.1;
 	double adiabat = 1.67;
-	double grav_const = 1;
-	////inter-thread-ey variables////
-	volatile bool iter_pause = true, iter_break = false;
-	volatile int threads_count = max(thread::hardware_concurrency() - 1, 1u);
+	double grav_const = 0.1;
+	volatile bool iter_pause = true;
+	const int threads_count = max(thread::hardware_concurrency() - 1, 1u);
 	greqit grei_base(fsize, 2);
 	greqit grei_buffer(fsize, 2);
 	greqit grei_i_buffer(fsize, 2);
@@ -292,6 +291,8 @@ namespace gc_iter {
 	std::mutex local_lock;
 	vector<pooled_thread*> threads;
 	int __step_counter = 0;
+	int step_counter = 0;
+
 	inline double rad_3(int64_t x, int64_t y) {
 		if (!x && !y)
 			return 0.;
@@ -317,20 +318,16 @@ namespace gc_iter {
 		return sum;
 	}
 	inline step_ans iter_grei_at(int64_t x, int64_t y, const greqit& gfield) {
-		step_ans ans{0};
-		constexpr bool is_test = true;
+		step_ans ans{0,0,0,0,0,0};
+		constexpr bool is_test = false;
 		if (is_test) {
 			ans.denergy =
 				d_h4::second_difference(gfield.density, x, y, d::dx) + d_h4::second_difference(gfield.density, x, y, d::dy);
 			ans.ddensity = gfield.energy.at(x, y);
-			ans.dxspeed = 0;
-			ans.dyspeed = 0;
-			ans.xforce = 0;
-			ans.yforce = 0;
 		}
 		else{
-			ans.xforce = 0;// grav_const * Fx(x, y);
-			ans.yforce = -0.01;// grav_const* Fy(x, y);
+			ans.xforce = grav_const * Fx(x, y);
+			ans.yforce = grav_const* Fy(x, y);
 
 			ans.ddensity = (
 				-(
@@ -376,51 +373,42 @@ namespace gc_iter {
 		}
 		return ans;
 	}
-
 	void create_iter_threads() {
 		gc_iter::iter_pause = false;
-		gc_iter::iter_break = false;
-
-		typedef struct {
-			int id;
-			int64_t start, end, fsize;
-			int *step_counter;
-		} thread_info;
-
-		local_lock.lock();
-		for (int thid = 0; thid < threads_count; thid++) {
-			const int64_t start = (thid)*fsize / (threads_count);
-			const int64_t end = (thid + 1) * fsize / (threads_count);
-
-			threads.push_back(new pooled_thread()); // executors
-			auto t = threads.back()->__void_ptr_accsess();
-			*t = (void*)(new thread_info{thid, start, end, fsize, &__step_counter});
-			threads.back()->set_new_function([](void** void_ptr) {
+		typedef struct { int id; int64_t start, end, fsize; int *step_counter; } thread_info;
+		local_lock.lock();//блокировка от преждевременной отрисовки
+		for (int thid = 0; thid < threads_count; thid++) {//
+			const int64_t start = (thid)*fsize / (threads_count);//начало "полосы"
+			const int64_t end = (thid + 1) * fsize / (threads_count);//конец полосы
+			threads.push_back(new pooled_thread()); // исполнитель
+			auto t = threads.back()->__void_ptr_accsess();// ѕолучаем доступ к хранилищу
+			*t = (void*)(new thread_info{thid, start, end, fsize, &__step_counter});//передаЄм необходимые данные
+			threads.back()->set_new_function([](void** void_ptr) {//исполн€ема€ функци€
 				thread_info** pptr = (thread_info**)void_ptr;
-				const int s_cnt = *(*pptr)->step_counter;
-				constexpr bool is_dbg_printf = false;
+				const int s_cnt = *(*pptr)->step_counter;//провер€ет кака€ стади€ вычислени€
+				constexpr bool is_dbg_printf = false;//дебаг
 				constexpr step_ans zero_sa{ 0,0,0,0,0,0 };
-				global_pause_lock.lock();
+				global_pause_lock.lock();//если пауза - приостанавливаемс€
 				for (int64_t x = (*pptr)->start; x < (*pptr)->end; x++) {
 					for (int64_t y = 0; y < (*pptr)->fsize; y++) {
-						if (!s_cnt) {//prognosis
-							auto dgrei = time_step * iter_grei_at(x, y, grei_base);
-							apply_step_ans(grei_f0buffer, dgrei, x, y, false);
-							dgrei = sum_step_ans(grei_base, dgrei, x, y, true);
+						if (!s_cnt) {//предиктор
+							auto dgrei = time_step * iter_grei_at(x, y, grei_base);//s(x,y,все пол€)
+							apply_step_ans(grei_f0buffer, dgrei, x, y, false);//запоминаем его на будущее
+							dgrei = sum_step_ans(grei_base, dgrei, x, y, true);//первое приближение
 							apply_step_ans(grei_i_buffer, 
 									dgrei, 
-								x, y, false);
+								x, y, false);//запоминаем что предсказали
 
 							if(is_dbg_printf) 
 								printf("%i: (%i:%i) D:%lf E:%lf X:%lf Y:%lf FX:%lf FY:%lf\n", s_cnt, x, y, dgrei.ddensity, dgrei.denergy, dgrei.dxspeed, dgrei.dyspeed, dgrei.xforce, dgrei.yforce);
 						}
-						else {//correction
-							auto dbuffer = time_step * iter_grei_at(x, y, grei_buffer);
-							auto f_0 = sum_step_ans(grei_f0buffer, zero_sa, x, y, true);
-							dbuffer = 0.5 * (f_0 + dbuffer);
+						else {//коррекци€
+							auto dbuffer = time_step * iter_grei_at(x, y, grei_buffer);//s(x,y,все пол€*)
+							auto f_0 = sum_step_ans(grei_f0buffer, zero_sa, x, y, true);//вспоминаем s(x,y,все пол€)
+							dbuffer = 0.5 * (f_0 + dbuffer);//формула 
 							apply_step_ans(grei_i_buffer,
 								sum_step_ans(grei_base, dbuffer, x, y, true),
-								x, y, false);
+								x, y, false);//записываем
 
 							if (is_dbg_printf) {
 								printf("%i: (%i:%i) D:%lf E:%lf X:%lf Y:%lf FX:%lf FY:%lf\n", s_cnt, x, y, dbuffer.ddensity, dbuffer.denergy, dbuffer.dxspeed, dbuffer.dyspeed, dbuffer.xforce, dbuffer.yforce);
@@ -428,39 +416,38 @@ namespace gc_iter {
 						}
 					}
 				}
-				global_pause_lock.unlock();
+				global_pause_lock.unlock();//снимаем с паузы
 			});
-			threads.back()->sign_awaiting();
+			threads.back()->sign_awaiting();//помечаем поток к выполнению
 		}
-		threads.push_back(new pooled_thread());//observer
+		threads.push_back(new pooled_thread());//наблюдатель
 		threads.back()->set_new_awaiting_time(10);
-		threads.back()->set_new_default_state(pooled_thread::state::waiting);
+		threads.back()->set_new_default_state(pooled_thread::state::waiting);//всегда ждЄт исполнени€
 		threads.back()->set_new_function([](void** ptr) {
 			for (auto ptr : threads)
 				if (ptr != threads.back() && ptr->get_state() != pooled_thread::state::idle) {
 					threads.back()->sign_awaiting();
 					return;
-				}
-
-			global_pause_lock.lock();
-
-			if (__step_counter == 4) {
-				grei_base.swap(grei_i_buffer);
+				}//у каждого - проверить, закончил ли он расчЄт
+			global_pause_lock.lock();//проверка на паузу
+			if (__step_counter == 2) {//закончили уточн€ть
+				grei_base.swap(grei_i_buffer);//записываем в отрисовываемый контейнер полей
+				step_counter++;
+				printf("it:%i\n", step_counter);
 				__step_counter = 0;
 				//printf("prediction\n");
 			}
-			else {
-				grei_i_buffer.swap(grei_buffer);
+			else {//необходимо продолжить уточнени€
+				grei_i_buffer.swap(grei_buffer);//мен€ем буфферы местами
 				__step_counter++;
 				//printf("correction\n");
 			}
-
 			global_pause_lock.unlock();
 			for (auto ptr : threads)
-				ptr->sign_awaiting();
+				ptr->sign_awaiting();//всех снова заставить выполнить функцию
 		});
-		threads.back()->sign_awaiting();
-		local_lock.unlock();
+		threads.back()->sign_awaiting();//ну тут пон€тно
+		local_lock.unlock();//усЄ
 	}
 }
 
