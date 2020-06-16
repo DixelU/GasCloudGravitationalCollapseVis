@@ -216,7 +216,7 @@ public:
 		return d_h2::first_difference(dsf, x, y, d::dx) + d_h2::first_difference(dsf, x, y, d::dy);
 	}
 	inline static double divergence_h4(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
-		return d_h4::first_difference(x_dsf, x, y, d::dx) + d_h4::first_difference(y_dsf, x, y, d::dy);
+		return d_h4::first_difference(x_dsf, x, y, d::dx) + d_h4::first_difference(y_dsf, x, y, d::dy); 
 	}
 	inline static double divergence_h2(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
 		return d_h2::first_difference(x_dsf, x, y, d::dx) + d_h2::first_difference(y_dsf, x, y, d::dy);
@@ -277,9 +277,10 @@ namespace gc_iter {
 		return sa;
 	}
 
-	int64_t fsize = 32;
+	int64_t fsize = 100;
 	double time_step = 0.1;
 	double adiabat = 1.67;
+	double thermal_radiation = 0.25;
 	double grav_const = 0.1;
 	volatile bool iter_pause = true;
 	const int threads_count = max(thread::hardware_concurrency() - 1, 1u);
@@ -302,7 +303,7 @@ namespace gc_iter {
 	inline double Fx(int64_t at_x, int64_t at_y) {
 		double sum = 0;
 		for (int64_t x = 0; x < fsize; x++) {
-			for (int64_t y = 0; y < fsize; y++) {
+			for (int64_t y = -fsize; y < fsize; y++) {
 				sum += rad_3(x - at_x, y - at_y)* (x - at_x)*grei_base.density.at(x, y);
 			}
 		}
@@ -319,7 +320,7 @@ namespace gc_iter {
 	}
 	inline step_ans iter_grei_at(int64_t x, int64_t y, const greqit& gfield) {
 		step_ans ans{0,0,0,0,0,0};
-		constexpr bool is_test = false;
+		constexpr bool is_test = true; 
 		if (is_test) {
 			ans.denergy =
 				d_h4::second_difference(gfield.density, x, y, d::dx) + d_h4::second_difference(gfield.density, x, y, d::dy);
@@ -327,7 +328,7 @@ namespace gc_iter {
 		}
 		else{
 			ans.xforce = grav_const * Fx(x, y);
-			ans.yforce = grav_const* Fy(x, y);
+			ans.yforce = grav_const * Fy(x, y);
 
 			ans.ddensity = (
 				-(
@@ -336,11 +337,16 @@ namespace gc_iter {
 					gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.density, x, y, d::dy)
 				)
 			);
+			
 			ans.denergy = (
 				-(
 					(adiabat - 1) * gfield.energy.at(x, y) * d_op::divergence_h2(gfield.x_speed, gfield.y_speed, x, y) + (
 						gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.energy, x, y, d::dx) +
 						gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.energy, x, y, d::dy)
+					)
+					-
+					thermal_radiation*(
+						d_h2::second_difference(gfield.energy, x, y, d::dx) + d_h2::second_difference(gfield.energy, x, y, d::dy)
 					)
 				)
 			);
@@ -353,6 +359,7 @@ namespace gc_iter {
 						gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.x_speed, x, y, d::dx) +
 						gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.x_speed, x, y, d::dy)
 					)
+
 				)
 				+
 				gfield.x_force.at(x, y)
@@ -430,7 +437,7 @@ namespace gc_iter {
 					return;
 				}//у каждого - проверить, закончил ли он расчёт
 			global_pause_lock.lock();//проверка на паузу
-			if (__step_counter == 2) {//закончили уточнять
+			if (__step_counter == 4) {//закончили уточнять
 				grei_base.swap(grei_i_buffer);//записываем в отрисовываемый контейнер полей
 				step_counter++;
 				printf("it:%i\n", step_counter);
@@ -450,4 +457,3 @@ namespace gc_iter {
 		local_lock.unlock();//усё
 	}
 }
-

@@ -24,26 +24,55 @@ using cfield = std::vector<cline>;
 
 using fv_utils::rdrand;
 
-auto constant_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
-	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
-		return f[y][x];
-	else 
-		return val;
+auto reflect_edge = [](field& f, int64_t x, int64_t y, double& val) -> double& {
+	int64_t size = f.size();
+	if (x < 0)
+		x = (-x) % size;
+	if (x >= size)
+		x = size - 1 - (x % size);
+	if (y < 0)
+		y = (-y) % size;
+	if (y >= size)
+		y = size - 1 - (y % size);
+	return f[y][x];
 };
-auto c_constant_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
-	if (x >= 0 && x < f.size() && y >= 0 && y < f.size())
-		return f[y][x];
-	else 
-		return val;
+
+auto c_reflect_edge = [](const field& f, int64_t x, int64_t y, const double& val) -> const double& {
+	int64_t size = f.size();
+	if (x < 0)
+		x = (-x) % size;
+	if (x >= size)
+		x = size - 1 - (x % size);
+	if (y < 0)
+		y = (-y) % size;
+	if (y >= size)
+		y = size - 1 - (y % size);
+	return f[y][x];
 };
 
 auto continue_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
 	int64_t size = f.size();
-	return f[(y + size)% size][(x + size) % size];
+	if (x < 0)
+		x = (size - ((-x) % size));
+	if (x >= size)
+		x = (x % size);
+	if (y < 0)
+		y = (size - ((-y) % size));
+	if (y >= size)
+		y = (y % size);
+	return f[y][x];
 };
 auto c_continue_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
 	int64_t size = f.size();
-	return f[(y + size) % size][(x + size) % size];
+	if (x < 0)
+		x = (size - ((-x) % size));
+	if (x >= size)
+		x = (x % size);
+	if (y < 0)
+		y = (size - ((-y) % size));
+	if (y >= size)
+		y = (y % size);
+	return f[y][x];
 };
 
 typedef struct complex_square_field {
@@ -239,15 +268,6 @@ inline std::tuple<float, float, float> get_color(float value) {
 		else
 			return HSVtoRGB(0, 0, 1);
 	}
-}
-
-inline float extended_edge(float V) {
-	constexpr float r = 4.5, q = -1.3;
-	return 1 - (r + q * V) / (V * V + r);
-}
-inline float extended_center(float V) {
-	constexpr float r = 9.8, q = 0;
-	return 1 - (r + q * V) / (V * V + r);
 }
 
 inline void draw_dsfield(const dsfield& dsf, float center_xpos, float center_ypos, float range, float pixel_size, float decrement = 1.) {

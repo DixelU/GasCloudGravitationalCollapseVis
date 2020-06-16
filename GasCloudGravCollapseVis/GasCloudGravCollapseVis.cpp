@@ -2673,27 +2673,23 @@ void Init() {
 /////////////END OF USE////////////////
 ///////////////////////////////////////
 
-
-
 void onTimer(int v);
 void mDisplay() {
 	glClear(GL_COLOR_BUFFER_BIT);
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
 
-
-
-		dsfield d_dsf(gc_iter::fsize, 1);
-		dsfield e_dsf(gc_iter::fsize, 1);
+		dsfield d_dsf(gc_iter::fsize, 0);
+		dsfield e_dsf(gc_iter::fsize, 0);
 
 		for (int x = 0; x < d_dsf.size(); x++) {
 			for (int y = 0; y < d_dsf.size(); y++) {//( (-pow(x - gc_iter::fsize * 0.5, 2) - pow(y - gc_iter::fsize * 0.5, 2))/(gc_iter::fsize/4))
 				d_dsf.at(x, y) =
-					exp((-pow(x - gc_iter::fsize * 0.65, 2) - pow(y - gc_iter::fsize * 0.65, 2)) / pow(gc_iter::fsize / 24, 2)) * 5. +
-
-					exp((-pow(x - gc_iter::fsize * 0.35, 2) - pow(y - gc_iter::fsize * 0.35, 2)) / pow(gc_iter::fsize / 24, 2)) * 5.
+						exp((-pow(x - gc_iter::fsize * 0.65, 2) - pow(y - gc_iter::fsize * 0.65, 2)) / pow(gc_iter::fsize / 24, 2)) * 1 + 
+						exp((-pow(x - gc_iter::fsize * 0.35, 2) - pow(y - gc_iter::fsize * 0.35, 2)) / pow(gc_iter::fsize / 24, 2)) * 1
+					//RANDFLOAT(0.1)
 					+ 0;
-				e_dsf.at(x, y) = 0.;/// d_dsf.at(x, y);
+				//e_dsf.at(x, y) = d_dsf.at(x, y);/// d_dsf.at(x, y);
 			}
 		}
 
