@@ -52,27 +52,23 @@ auto c_reflect_edge = [](const field& f, int64_t x, int64_t y, const double& val
 
 auto continue_edge = [](field &f, int64_t x, int64_t y, double &val) -> double& {
 	int64_t size = f.size();
+	x %= size;
+	y %= size;
 	if (x < 0)
-		x = (size - ((-x) % size));
-	if (x >= size)
-		x = (x % size);
+		x += size;
 	if (y < 0)
-		y = (size - ((-y) % size));
-	if (y >= size)
-		y = (y % size);
-	return f[y][x];
+		y += size;
+	return f[static_cast<size_t>(y)][static_cast<size_t>(x)];
 };
 auto c_continue_edge = [](const field &f, int64_t x, int64_t y, const double &val) -> const double& {
 	int64_t size = f.size();
+	x %= size;
+	y %= size;
 	if (x < 0)
-		x = (size - ((-x) % size));
-	if (x >= size)
-		x = (x % size);
+		x += size;
 	if (y < 0)
-		y = (size - ((-y) % size));
-	if (y >= size)
-		y = (y % size);
-	return f[y][x];
+		y += size;
+	return f[static_cast<size_t>(y)][static_cast<size_t>(x)];
 };
 
 typedef struct complex_square_field {

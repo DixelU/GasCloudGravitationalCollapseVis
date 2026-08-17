@@ -2624,16 +2624,7 @@ void OnWheel_EnterPress(double var) {
 	Field_Adapter_ptr->brightness = var;
 }
 void Pause() {
-	gc_iter::iter_pause ^= true;
-	switch (gc_iter::iter_pause)
-	{
-	case true:
-		gc_iter::global_pause_lock.lock();
-		break;
-	case false:
-		gc_iter::global_pause_lock.unlock();
-		break;
-	}
+	gc_iter::iter_pause.store(!gc_iter::iter_pause.load());
 }
 void OnSelectPropList(int ID) {
 	cout << ID << endl;;
@@ -2679,25 +2670,9 @@ void mDisplay() {
 	if (FIRSTBOOT) {
 		FIRSTBOOT = 0;
 
-		dsfield d_dsf(gc_iter::fsize, 0);
-		dsfield e_dsf(gc_iter::fsize, 0);
-
-		for (int x = 0; x < d_dsf.size(); x++) {
-			for (int y = 0; y < d_dsf.size(); y++) {//( (-pow(x - gc_iter::fsize * 0.5, 2) - pow(y - gc_iter::fsize * 0.5, 2))/(gc_iter::fsize/4))
-				d_dsf.at(x, y) =
-						exp((-pow(x - gc_iter::fsize * 0.65, 2) - pow(y - gc_iter::fsize * 0.65, 2)) / pow(gc_iter::fsize / 24, 2)) * 1 + 
-						exp((-pow(x - gc_iter::fsize * 0.35, 2) - pow(y - gc_iter::fsize * 0.35, 2)) / pow(gc_iter::fsize / 24, 2)) * 1
-					//RANDFLOAT(0.1)
-					+ 0;
-				//e_dsf.at(x, y) = d_dsf.at(x, y);/// d_dsf.at(x, y);
-			}
-		}
-
-		gc_iter::grei_base.density.swap(d_dsf);
-		gc_iter::grei_base.energy.swap(e_dsf);
+		gc_iter::initialize_two_clouds(gc_iter::grei_base);
 
 		gc_iter::create_iter_threads();
-		Pause();
 
 		WH = new WindowsHandler();
 		Init();
@@ -2781,6 +2756,24 @@ void mExit(int a) {
 }
 
 int main(int argc, char** argv) {
+	for (int argument = 1; argument < argc; ++argument) {
+		const string current_argument(argv[argument]);
+		if (current_argument == "--self-test" || current_argument.rfind("--self-test=", 0) == 0) {
+			int self_test_steps = 200;
+			if (current_argument.size() > 12 && current_argument[11] == '=')
+				self_test_steps = max(1, atoi(current_argument.c_str() + 12));
+			const gc_iter::stability_report report = gc_iter::run_stability_check(self_test_steps);
+			const double relative_mass_error = fabs(report.final.mass - report.initial.mass) /
+				max(report.initial.mass, gc_iter::density_floor);
+			printf("static-grid stability check: %s\n", report.success ? "PASS" : "FAIL");
+			printf("steps:%i simulated_time:%.6f mass_error:%.9f\n",
+				report.completed_steps, report.elapsed_time, relative_mass_error);
+			printf("density:[%.9g, %.9g] max_speed:%.9g second_moment:%.9g -> %.9g\n",
+				report.final.min_density, report.final.max_density, report.final.max_speed,
+				report.initial.second_moment, report.final.second_moment);
+			return report.success ? 0 : 2;
+		}
+	}
 	if (1)
 		ShowWindow(GetConsoleWindow(), SW_SHOW);
 	SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);

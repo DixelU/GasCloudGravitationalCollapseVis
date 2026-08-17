@@ -1,459 +1,64 @@
 #pragma once
-#include <thread>
-#include <complex>
-#include <functional>
-#include "field_vis.h"
-#include "weird_hacks.h"
-#include "consts.h"
-#include "pooled_thread.h"
 
-using namespace std;
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <limits>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+#include "consts.h"
+#include "field_vis.h"
 
 struct greqit {
-	dsfield density,
-		x_speed,
-		y_speed,
-		x_force,
-		y_force,
-		energy;
-	greqit(size_t n, double initial_temp = 1.) {
-		density = dsfield(n, 0, continue_edge, c_continue_edge);
-		x_speed = dsfield(n, 0, continue_edge, c_continue_edge);
-		y_speed = dsfield(n, 0, continue_edge, c_continue_edge);
-		x_force = dsfield(n, 0, continue_edge, c_continue_edge);
-		y_force = dsfield(n, 0, continue_edge, c_continue_edge);
-		energy = dsfield(n, initial_temp, continue_edge, c_continue_edge);
-		for (auto &y : energy.fd) {
-			for (auto &x : y) {
-				x = initial_temp;
-			}
+	dsfield density;
+	dsfield x_speed;
+	dsfield y_speed;
+	dsfield x_force;
+	dsfield y_force;
+	dsfield energy;
+
+	explicit greqit(size_t side, double initial_energy = 1.) :
+		density(side, 0., continue_edge, c_continue_edge),
+		x_speed(side, 0., continue_edge, c_continue_edge),
+		y_speed(side, 0., continue_edge, c_continue_edge),
+		x_force(side, 0., continue_edge, c_continue_edge),
+		y_force(side, 0., continue_edge, c_continue_edge),
+		energy(side, initial_energy, continue_edge, c_continue_edge) {
+		for (auto& row : energy.fd) {
+			for (double& value : row)
+				value = initial_energy;
 		}
 	}
-	greqit(const dsfield &dsf_p, double initial_energy = 1.) {
-		density = dsf_p;
-		x_speed = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
-		y_speed = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
-		x_force = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
-		y_force = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
-		energy = dsfield(dsf_p.size(), initial_energy, continue_edge, c_continue_edge);
-		for (auto &y : energy.fd) {
-			for (auto &x : y) {
-				x = initial_energy;
-			}
-		}
+
+	explicit greqit(const dsfield& initial_density, double initial_energy = 1.) :
+		greqit(initial_density.size(), initial_energy) {
+		density = initial_density;
 	}
-	greqit(const dsfield &dsf_p, const dsfield &dsf_vx, const dsfield &dsf_vy, double initial_temp = 1.) {
-		density = dsf_p;
-		x_speed = dsf_vx;
-		y_speed = dsf_vy;
-		x_force = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
-		y_force = dsfield(dsf_p.size(), 0, continue_edge, c_continue_edge);
-		energy = dsfield(dsf_p.size(), initial_temp, continue_edge, c_continue_edge);
-		for (auto &y : energy.fd) {
-			for (auto &x : y) {
-				x = initial_temp;
-			}
-		}
+
+	greqit(const dsfield& initial_density, const dsfield& initial_x_speed,
+		const dsfield& initial_y_speed, double initial_energy = 1.) :
+		greqit(initial_density.size(), initial_energy) {
+		density = initial_density;
+		x_speed = initial_x_speed;
+		y_speed = initial_y_speed;
 	}
-	void swap(greqit &grei) {
-		density.swap(grei.density);
-		x_speed.swap(grei.x_speed);
-		y_speed.swap(grei.y_speed);
-		x_force.swap(grei.x_force);
-		y_force.swap(grei.y_force);
-		energy.swap(grei.energy);
+
+	void swap(greqit& other) {
+		density.swap(other.density);
+		x_speed.swap(other.x_speed);
+		y_speed.swap(other.y_speed);
+		x_force.swap(other.x_force);
+		y_force.swap(other.y_force);
+		energy.swap(other.energy);
 	}
-	inline size_t size() {
+
+	size_t size() const {
 		return density.size();
 	}
 };
 
-enum class d {
-	dx, dy, dxy
-};
-
-class d_h2 {
-	inline static double _first_finite_difference(double left1, double right1) {
-		return (right1 - left1) * 0.5;
-	}
-	inline static double _first_finite_difference_x(const dsfield& dsf, int64_t x, int64_t y) {
-		return _first_finite_difference(
-			dsf.at(x - 1, y),
-			dsf.at(x + 1, y)
-			);
-	}
-	inline static double _first_finite_difference_y(const dsfield& dsf, int64_t x, int64_t y) {
-		return _first_finite_difference(
-			dsf.at(x, y - 1),
-			dsf.at(x, y + 1)
-			);
-	}
-	inline static double _second_finite_difference(double left1, double center, double right1) {
-		return (left1 - 2. * center + right1);
-	}
-	inline static double _second_finite_difference_xx(const dsfield& dsf, int64_t x, int64_t y) {
-		return _second_finite_difference(
-			dsf.at(x - 1, y),
-			dsf.at(x, y),
-			dsf.at(x + 1, y)
-			);
-	}
-	inline static double _second_finite_difference_yy(const dsfield& dsf, int64_t x, int64_t y) {
-		return _second_finite_difference(
-			dsf.at(x, y - 1),
-			dsf.at(x, y),
-			dsf.at(x, y + 1)
-			);
-	}
-	inline static double _second_finite_difference_xy(const dsfield& dsf, int64_t x, int64_t y) {
-		return _first_finite_difference(
-			_first_finite_difference_x(dsf, x, y - 1),
-			_first_finite_difference_x(dsf, x, y + 1)
-			);
-	}
-public:
-	inline static double second_difference(const dsfield& dsf, int64_t x, int64_t y, d diff) {
-		switch (diff) {
-		case d::dx:
-			return _second_finite_difference_xx(dsf, x, y);
-		case d::dy:
-			return _second_finite_difference_yy(dsf, x, y);
-		case d::dxy:
-		default:
-			return _second_finite_difference_xy(dsf, x, y);
-		}
-	}
-	inline static double first_difference(const dsfield& dsf, int64_t x, int64_t y, d diff) {
-		switch (diff) {
-		case d::dx:
-			return _first_finite_difference_x(dsf, x, y);
-		case d::dy:
-			return _first_finite_difference_y(dsf, x, y);
-		}
-	}
-};
-
-class d_h4 {
-	inline static double _first_finite_difference(double left2, double left1, double right1, const double& right2) {
-		return (.25 * left2 - 2 * left1 + 2 * right1 - .25 * right2) / 3.;
-	}
-	inline static double _first_finite_difference_x(const dsfield& dsf, int64_t x, int64_t y) {
-		return _first_finite_difference(
-			dsf.at(x - 2, y),
-			dsf.at(x - 1, y),
-			dsf.at(x + 1, y),
-			dsf.at(x + 2, y)
-			);
-	}
-	inline static double _first_finite_difference_y(const dsfield& dsf, int64_t x, int64_t y) {
-		return _first_finite_difference(
-			dsf.at(x, y - 2),
-			dsf.at(x, y - 1),
-			dsf.at(x, y + 1),
-			dsf.at(x, y + 2)
-			);
-	}
-	inline static double _second_finite_difference(double left2, double left1, double center, double right1, double right2) {
-		return (-.25 * left2 + 4. * left1 - 7.5 * center + 4. * right1 - .25 * right2) / 3.;
-	}
-	inline static double _second_finite_difference_xx(const dsfield& dsf, int64_t x, int64_t y) {
-		return _second_finite_difference(
-			dsf.at(x - 2, y),
-			dsf.at(x - 1, y),
-			dsf.at(x, y),
-			dsf.at(x + 1, y),
-			dsf.at(x + 2, y)
-			);
-	}
-	inline static double _second_finite_difference_yy(const dsfield& dsf, int64_t x, int64_t y) {
-		return _second_finite_difference(
-			dsf.at(x, y - 2),
-			dsf.at(x, y - 1),
-			dsf.at(x, y),
-			dsf.at(x, y + 1),
-			dsf.at(x, y + 2)
-			);
-	}
-	inline static double _second_finite_difference_xy(const dsfield& dsf, int64_t x, int64_t y) {
-		return _first_finite_difference(
-			_first_finite_difference_x(dsf, x, y - 2),
-			_first_finite_difference_x(dsf, x, y - 1),
-			_first_finite_difference_x(dsf, x, y + 1),
-			_first_finite_difference_x(dsf, x, y + 2)
-			);
-	}
-public:
-	inline static double second_difference(const dsfield& dsf, int64_t x, int64_t y, d diff) {
-		switch (diff) {
-		case d::dx:
-			return _second_finite_difference_xx(dsf, x, y);
-		case d::dy:
-			return _second_finite_difference_yy(dsf, x, y);
-		case d::dxy:
-		default:
-			_second_finite_difference_xy(dsf, x, y);
-		}
-	}
-	inline static double first_difference(const dsfield& dsf, int64_t x, int64_t y, d diff) {
-		if (diff == d::dx)
-			return _first_finite_difference_x(dsf, x, y);
-		else
-			return _first_finite_difference_y(dsf, x, y);
-	}
-};
-
-class d_op {
-	inline static void cross_product(double a1, double a2, double a3, double b1, double b2, double b3, double& out1, double& out2, double& out3) {
-		out1 = a2 * b3 - a3 * b2;
-		out2 = a1 * b3 - a3 * b1;
-		out3 = a1 * b2 - a2 * b1;
-	}
-public:
-	inline static double divergence_h4(const dsfield& dsf, int64_t x, int64_t y) {
-		return d_h4::first_difference(dsf, x, y, d::dx) + d_h4::first_difference(dsf, x, y, d::dy);
-	}
-	inline static double divergence_h2(const dsfield& dsf, int64_t x, int64_t y) {
-		return d_h2::first_difference(dsf, x, y, d::dx) + d_h2::first_difference(dsf, x, y, d::dy);
-	}
-	inline static double divergence_h4(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
-		return d_h4::first_difference(x_dsf, x, y, d::dx) + d_h4::first_difference(y_dsf, x, y, d::dy); 
-	}
-	inline static double divergence_h2(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
-		return d_h2::first_difference(x_dsf, x, y, d::dx) + d_h2::first_difference(y_dsf, x, y, d::dy);
-	}
-	inline static double DF_h4_curl_2d_operator(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
-		return d_h2::first_difference(y_dsf, x, y, d::dy) - d_h4::first_difference(x_dsf, x, y, d::dx);
-	}
-	inline static double DF_h2_curl_2d_operator(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y) {
-		return d_h2::first_difference(y_dsf, x, y, d::dy) - d_h2::first_difference(x_dsf, x, y, d::dx);
-	}
-	inline static void DF_h4_lamb_operator_at(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y, double& out_x, double& out_y) {
-		double curl_z = DF_h4_curl_2d_operator(x_dsf, y_dsf, x, y);
-		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
-	}
-	inline static void DF_h2_lamb_operator_at(const dsfield& x_dsf, const dsfield& y_dsf, int64_t x, int64_t y, double& out_x, double& out_y) {
-		double curl_z = DF_h2_curl_2d_operator(x_dsf, y_dsf, x, y);
-		cross_product(0, 0, curl_z, x_dsf.at(x, y), y_dsf.at(x, y), 0, out_x, out_y, curl_z);
-	}
-};
-
-namespace gc_iter {
-	typedef struct {
-		double denergy, ddensity, dxspeed, dyspeed, xforce, yforce;
-	} step_ans;
-	step_ans operator*(double mul, step_ans sa) {
-		sa.ddensity *= mul;
-		sa.denergy *= mul;
-		sa.dxspeed *= mul;
-		sa.dyspeed *= mul;
-		sa.xforce *= mul;
-		sa.yforce *= mul;
-		return sa;
-	}
-	step_ans operator+(step_ans fa, step_ans sa) {
-		sa.ddensity += fa.ddensity;
-		sa.denergy += fa.denergy;
-		sa.dxspeed += fa.dxspeed;
-		sa.dyspeed += fa.dyspeed;
-		sa.xforce += fa.xforce;
-		sa.yforce += fa.yforce;
-		return sa;
-	}
-	void apply_step_ans(greqit& gr, const step_ans &sa, int64_t x, int64_t y, bool add_flag) {
-		gr.density.at(x, y) = (add_flag * gr.density.at(x, y)) + sa.ddensity;//apply_step_ans
-		gr.energy.at(x, y) = add_flag * gr.energy.at(x, y) + sa.denergy;
-		gr.x_speed.at(x, y) = add_flag * gr.x_speed.at(x, y) + sa.dxspeed;
-		gr.y_speed.at(x, y) = add_flag * gr.y_speed.at(x, y) + sa.dyspeed;
-		gr.x_force.at(x, y) = add_flag * gr.x_force.at(x, y) + sa.xforce;
-		gr.y_force.at(x, y) = add_flag * gr.y_force.at(x, y) + sa.yforce;
-	}
-	step_ans sum_step_ans(const greqit& gr, step_ans sa, int64_t x, int64_t y, bool add_flag) {
-		sa.ddensity = add_flag * gr.density.at(x, y) + sa.ddensity;//sum_step_ans
-		sa.denergy = add_flag * gr.energy.at(x, y) + sa.denergy;
-		sa.dxspeed = add_flag * gr.x_speed.at(x, y) + sa.dxspeed;
-		sa.dyspeed = add_flag * gr.y_speed.at(x, y) + sa.dyspeed;
-		sa.xforce = add_flag * gr.x_force.at(x, y) + sa.xforce;
-		sa.yforce = add_flag * gr.y_force.at(x, y) + sa.yforce;
-		return sa;
-	}
-
-	int64_t fsize = 100;
-	double time_step = 0.1;
-	double adiabat = 1.67;
-	double thermal_radiation = 0.25;
-	double grav_const = 0.1;
-	volatile bool iter_pause = true;
-	const int threads_count = max(thread::hardware_concurrency() - 1, 1u);
-	greqit grei_base(fsize, 2);
-	greqit grei_buffer(fsize, 2);
-	greqit grei_i_buffer(fsize, 2);
-	greqit grei_f0buffer(fsize, 2);
-	std::recursive_mutex global_pause_lock;
-	std::mutex local_lock;
-	vector<pooled_thread*> threads;
-	int __step_counter = 0;
-	int step_counter = 0;
-
-	inline double rad_3(int64_t x, int64_t y) {
-		if (!x && !y)
-			return 0.;
-		else
-			return 1. / pow(x * x + y * y, 1.5);
-	}
-	inline double Fx(int64_t at_x, int64_t at_y) {
-		double sum = 0;
-		for (int64_t x = 0; x < fsize; x++) {
-			for (int64_t y = -fsize; y < fsize; y++) {
-				sum += rad_3(x - at_x, y - at_y)* (x - at_x)*grei_base.density.at(x, y);
-			}
-		}
-		return sum;
-	}
-	inline double Fy(int64_t at_x, int64_t at_y) {
-		double sum = 0;
-		for (int64_t x = 0; x < fsize; x++) {
-			for (int64_t y = 0; y < fsize; y++) {
-				sum += rad_3(x - at_x, y - at_y)* (y - at_y)*grei_base.density.at(x, y);
-			}
-		}
-		return sum;
-	}
-	inline step_ans iter_grei_at(int64_t x, int64_t y, const greqit& gfield) {
-		step_ans ans{0,0,0,0,0,0};
-		constexpr bool is_test = true; 
-		if (is_test) {
-			ans.denergy =
-				d_h4::second_difference(gfield.density, x, y, d::dx) + d_h4::second_difference(gfield.density, x, y, d::dy);
-			ans.ddensity = gfield.energy.at(x, y);
-		}
-		else{
-			ans.xforce = grav_const * Fx(x, y);
-			ans.yforce = grav_const * Fy(x, y);
-
-			ans.ddensity = (
-				-(
-					gfield.density.at(x, y) * (d_op::divergence_h2(gfield.x_speed, gfield.y_speed, x, y)) +
-					gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.density, x, y, d::dx) +
-					gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.density, x, y, d::dy)
-				)
-			);
-			
-			ans.denergy = (
-				-(
-					(adiabat - 1) * gfield.energy.at(x, y) * d_op::divergence_h2(gfield.x_speed, gfield.y_speed, x, y) + (
-						gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.energy, x, y, d::dx) +
-						gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.energy, x, y, d::dy)
-					)
-					-
-					thermal_radiation*(
-						d_h2::second_difference(gfield.energy, x, y, d::dx) + d_h2::second_difference(gfield.energy, x, y, d::dy)
-					)
-				)
-			);
-			ans.dxspeed = (
-				-(
-					(adiabat - 1) * (
-						d_h2::first_difference(gfield.density, x, y, d::dx) * gfield.energy.at(x, y) / gfield.density.at(x, y) +
-						d_h2::first_difference(gfield.energy, x, y, d::dx)
-					) +	(
-						gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.x_speed, x, y, d::dx) +
-						gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.x_speed, x, y, d::dy)
-					)
-
-				)
-				+
-				gfield.x_force.at(x, y)
-				);
-			ans.dyspeed = (
-				-(
-					(adiabat - 1) * (
-						d_h2::first_difference(gfield.density, x, y, d::dy) * gfield.energy.at(x, y) / gfield.density.at(x, y) +
-						d_h2::first_difference(gfield.energy, x, y, d::dy)
-					) + (
-						gfield.x_speed.at(x, y) * d_h2::first_difference(gfield.y_speed, x, y, d::dx) +
-						gfield.y_speed.at(x, y) * d_h2::first_difference(gfield.y_speed, x, y, d::dy)
-					)
-				)
-				+
-				gfield.y_force.at(x, y)
-			);
-		}
-		return ans;
-	}
-	void create_iter_threads() {
-		gc_iter::iter_pause = false;
-		typedef struct { int id; int64_t start, end, fsize; int *step_counter; } thread_info;
-		local_lock.lock();//блокировка от преждевременной отрисовки
-		for (int thid = 0; thid < threads_count; thid++) {//
-			const int64_t start = (thid)*fsize / (threads_count);//начало "полосы"
-			const int64_t end = (thid + 1) * fsize / (threads_count);//конец полосы
-			threads.push_back(new pooled_thread()); // исполнитель
-			auto t = threads.back()->__void_ptr_accsess();// ѕолучаем доступ к хранилищу
-			*t = (void*)(new thread_info{thid, start, end, fsize, &__step_counter});//передаЄм необходимые данные
-			threads.back()->set_new_function([](void** void_ptr) {//исполн€ема€ функци€
-				thread_info** pptr = (thread_info**)void_ptr;
-				const int s_cnt = *(*pptr)->step_counter;//провер€ет кака€ стади€ вычислени€
-				constexpr bool is_dbg_printf = false;//дебаг
-				constexpr step_ans zero_sa{ 0,0,0,0,0,0 };
-				global_pause_lock.lock();//если пауза - приостанавливаемс€
-				for (int64_t x = (*pptr)->start; x < (*pptr)->end; x++) {
-					for (int64_t y = 0; y < (*pptr)->fsize; y++) {
-						if (!s_cnt) {//предиктор
-							auto dgrei = time_step * iter_grei_at(x, y, grei_base);//s(x,y,все пол€)
-							apply_step_ans(grei_f0buffer, dgrei, x, y, false);//запоминаем его на будущее
-							dgrei = sum_step_ans(grei_base, dgrei, x, y, true);//первое приближение
-							apply_step_ans(grei_i_buffer, 
-									dgrei, 
-								x, y, false);//запоминаем что предсказали
-
-							if(is_dbg_printf) 
-								printf("%i: (%i:%i) D:%lf E:%lf X:%lf Y:%lf FX:%lf FY:%lf\n", s_cnt, x, y, dgrei.ddensity, dgrei.denergy, dgrei.dxspeed, dgrei.dyspeed, dgrei.xforce, dgrei.yforce);
-						}
-						else {//коррекци€
-							auto dbuffer = time_step * iter_grei_at(x, y, grei_buffer);//s(x,y,все пол€*)
-							auto f_0 = sum_step_ans(grei_f0buffer, zero_sa, x, y, true);//вспоминаем s(x,y,все пол€)
-							dbuffer = 0.5 * (f_0 + dbuffer);//формула 
-							apply_step_ans(grei_i_buffer,
-								sum_step_ans(grei_base, dbuffer, x, y, true),
-								x, y, false);//записываем
-
-							if (is_dbg_printf) {
-								printf("%i: (%i:%i) D:%lf E:%lf X:%lf Y:%lf FX:%lf FY:%lf\n", s_cnt, x, y, dbuffer.ddensity, dbuffer.denergy, dbuffer.dxspeed, dbuffer.dyspeed, dbuffer.xforce, dbuffer.yforce);
-							}
-						}
-					}
-				}
-				global_pause_lock.unlock();//снимаем с паузы
-			});
-			threads.back()->sign_awaiting();//помечаем поток к выполнению
-		}
-		threads.push_back(new pooled_thread());//наблюдатель
-		threads.back()->set_new_awaiting_time(10);
-		threads.back()->set_new_default_state(pooled_thread::state::waiting);//всегда ждЄт исполнени€
-		threads.back()->set_new_function([](void** ptr) {
-			for (auto ptr : threads)
-				if (ptr != threads.back() && ptr->get_state() != pooled_thread::state::idle) {
-					threads.back()->sign_awaiting();
-					return;
-				}//у каждого - проверить, закончил ли он расчЄт
-			global_pause_lock.lock();//проверка на паузу
-			if (__step_counter == 4) {//закончили уточн€ть
-				grei_base.swap(grei_i_buffer);//записываем в отрисовываемый контейнер полей
-				step_counter++;
-				printf("it:%i\n", step_counter);
-				__step_counter = 0;
-				//printf("prediction\n");
-			}
-			else {//необходимо продолжить уточнени€
-				grei_i_buffer.swap(grei_buffer);//мен€ем буфферы местами
-				__step_counter++;
-				//printf("correction\n");
-			}
-			global_pause_lock.unlock();
-			for (auto ptr : threads)
-				ptr->sign_awaiting();//всех снова заставить выполнить функцию
-		});
-		threads.back()->sign_awaiting();//ну тут пон€тно
-		local_lock.unlock();//усЄ
-	}
-}
+#include "stable_grid_solver.h"
