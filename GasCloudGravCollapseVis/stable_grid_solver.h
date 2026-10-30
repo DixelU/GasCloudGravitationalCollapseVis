@@ -1,11 +1,11 @@
 #pragma once
 
 //
-// The fluid update is a conservative finite-volume Euler step with Rusanov
-// interface fluxes. It is deliberately first order: some numerical diffusion
-// is preferable here to the unbounded centered advection used by the original
-// course-work experiment. Gravity comes from a mean-subtracted periodic
-// Poisson solve, which avoids the old 1/r singularity and O(N^4) force loop.
+// The fluid update is conservative finite volume with Rusanov interface fluxes
+// and limited MUSCL reconstruction. It is second order in space in smooth gas,
+// while the limiter falls back toward first order at shocks and near extrema.
+// Gravity comes from a mean-subtracted periodic Poisson solve, which avoids the
+// old 1/r singularity and O(N^4) force loop.
 
 namespace gc_iter {
 
@@ -18,6 +18,7 @@ double initial_internal_energy = 0.05;
 constexpr double density_floor = 1e-6;
 constexpr double energy_floor = 1e-4;
 constexpr double courant_number = 0.35;
+constexpr double reconstruction_theta = 1.5;
 constexpr int poisson_iterations = 80;
 constexpr double poisson_relaxation = 2. / 3.;
 
@@ -36,11 +37,21 @@ struct conserved {
 	double total_energy;
 };
 
+struct primitive {
+	double density;
+	double x_speed;
+	double y_speed;
+	double internal_energy;
+};
+
 struct solver_workspace {
 	std::vector<conserved> current;
 	std::vector<conserved> next;
 	std::vector<conserved> x_flux;
 	std::vector<conserved> y_flux;
+	std::vector<primitive> primitive_state;
+	std::vector<primitive> x_slope;
+	std::vector<primitive> y_slope;
 	std::vector<double> potential;
 	std::vector<double> potential_buffer;
 	std::vector<double> poisson_source;
@@ -58,6 +69,9 @@ struct solver_workspace {
 		next.resize(cells);
 		x_flux.resize(cells);
 		y_flux.resize(cells);
+		primitive_state.resize(cells);
+		x_slope.resize(cells);
+		y_slope.resize(cells);
 		potential.resize(cells, 0.);
 		potential_buffer.resize(cells, 0.);
 		poisson_source.resize(cells, 0.);
@@ -136,6 +150,65 @@ inline void primitive_values(const conserved& value, double& density, double& x_
 	sound_speed = sqrt((std::max)(adiabat * pressure / density, 0.));
 }
 
+inline primitive to_primitive(const conserved& value) {
+	primitive answer;
+	double pressure, sound_speed;
+	primitive_values(value, answer.density, answer.x_speed, answer.y_speed,
+		pressure, sound_speed, answer.internal_energy);
+	return answer;
+}
+
+inline conserved to_conserved(const primitive& value) {
+	const double density = std::isfinite(value.density) ?
+		(std::max)(value.density, density_floor) : density_floor;
+	const double x_speed = std::isfinite(value.x_speed) ? value.x_speed : 0.;
+	const double y_speed = std::isfinite(value.y_speed) ? value.y_speed : 0.;
+	const double internal_energy = std::isfinite(value.internal_energy) ?
+		(std::max)(value.internal_energy, energy_floor) : initial_internal_energy;
+	return {
+		density,
+		density * x_speed,
+		density * y_speed,
+		density * internal_energy +
+			0.5 * density * (x_speed * x_speed + y_speed * y_speed)
+	};
+}
+
+inline double limited_gradient(double left, double center, double right) {
+	const double backward = reconstruction_theta * (center - left);
+	const double centered = 0.5 * (right - left);
+	const double forward = reconstruction_theta * (right - center);
+	if ((backward > 0. && centered > 0. && forward > 0.) ||
+		(backward < 0. && centered < 0. && forward < 0.)) {
+		return copysign((std::min)(fabs(backward),
+			(std::min)(fabs(centered), fabs(forward))), backward);
+	}
+	return 0.;
+}
+
+inline primitive limited_slope(const primitive& left, const primitive& center,
+	const primitive& right) {
+	return {
+		limited_gradient(left.density, center.density, right.density),
+		limited_gradient(left.x_speed, center.x_speed, right.x_speed),
+		limited_gradient(left.y_speed, center.y_speed, right.y_speed),
+		limited_gradient(left.internal_energy, center.internal_energy, right.internal_energy)
+	};
+}
+
+inline primitive reconstructed_value(const primitive& center, const primitive& slope,
+	double direction) {
+	primitive answer{
+		center.density + direction * slope.density,
+		center.x_speed + direction * slope.x_speed,
+		center.y_speed + direction * slope.y_speed,
+		center.internal_energy + direction * slope.internal_energy
+	};
+	answer.density = (std::max)(answer.density, density_floor);
+	answer.internal_energy = (std::max)(answer.internal_energy, energy_floor);
+	return answer;
+}
+
 inline conserved physical_flux(const conserved& value, bool x_direction, double& signal_speed) {
 	double density, x_speed, y_speed, pressure, sound_speed, internal_energy;
 	primitive_values(value, density, x_speed, y_speed, pressure, sound_speed, internal_energy);
@@ -192,6 +265,35 @@ inline void prepare_conserved(const greqit& state, solver_workspace& workspace) 
 			};
 		}
 	}
+}
+
+inline void prepare_reconstruction(solver_workspace& workspace, size_t side) {
+	for (size_t at = 0; at < workspace.current.size(); ++at)
+		workspace.primitive_state[at] = to_primitive(workspace.current[at]);
+
+	for (size_t y = 0; y < side; ++y) {
+		for (size_t x = 0; x < side; ++x) {
+			const size_t at = y * side + x;
+			workspace.x_slope[at] = limited_slope(
+				workspace.primitive_state[grid_index(static_cast<int64_t>(x) - 1, y, side)],
+				workspace.primitive_state[at],
+				workspace.primitive_state[grid_index(static_cast<int64_t>(x) + 1, y, side)]);
+			workspace.y_slope[at] = limited_slope(
+				workspace.primitive_state[grid_index(x, static_cast<int64_t>(y) - 1, side)],
+				workspace.primitive_state[at],
+				workspace.primitive_state[grid_index(x, static_cast<int64_t>(y) + 1, side)]);
+		}
+	}
+}
+
+inline conserved reconstructed_flux(const solver_workspace& workspace, size_t left,
+	size_t right, bool x_direction) {
+	const std::vector<primitive>& slope = x_direction ? workspace.x_slope : workspace.y_slope;
+	const conserved left_state = to_conserved(reconstructed_value(
+		workspace.primitive_state[left], slope[left], 0.5));
+	const conserved right_state = to_conserved(reconstructed_value(
+		workspace.primitive_state[right], slope[right], -0.5));
+	return rusanov_flux(left_state, right_state, x_direction);
 }
 
 inline void solve_periodic_gravity(const greqit& state, solver_workspace& workspace) {
@@ -260,19 +362,20 @@ inline double stable_time_step(const solver_workspace& workspace) {
 inline double advance_one_step(greqit& state, solver_workspace& workspace) {
 	const size_t side = state.size();
 	prepare_conserved(state, workspace);
+	prepare_reconstruction(workspace, side);
 	solve_periodic_gravity(state, workspace);
 	const double dt = stable_time_step(workspace);
 
 	for (size_t y = 0; y < side; ++y) {
 		for (size_t x = 0; x < side; ++x) {
 			const size_t at = y * side + x;
-			workspace.x_flux[at] = rusanov_flux(
-				workspace.current[at],
-				workspace.current[grid_index(static_cast<int64_t>(x) + 1, y, side)],
+			workspace.x_flux[at] = reconstructed_flux(
+				workspace, at,
+				grid_index(static_cast<int64_t>(x) + 1, y, side),
 				true);
-			workspace.y_flux[at] = rusanov_flux(
-				workspace.current[at],
-				workspace.current[grid_index(x, static_cast<int64_t>(y) + 1, side)],
+			workspace.y_flux[at] = reconstructed_flux(
+				workspace, at,
+				grid_index(x, static_cast<int64_t>(y) + 1, side),
 				false);
 		}
 	}
